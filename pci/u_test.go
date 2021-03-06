@@ -3,18 +3,17 @@ package pci
 import (
 	"encoding/hex"
 	"log"
+	"syscall"
 	"testing"
-
-	"golang.org/x/sys/unix"
 )
 
 func TestDevUIO(t *testing.T) {
 	fname := "/dev/uio0"
-	fd, err := unix.Open(fname, unix.O_RDWR, 0)
+	fd, err := syscall.Open(fname, syscall.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unix.Close(fd)
+	defer syscall.Close(fd)
 }
 
 func TestConfig(t *testing.T) {
@@ -22,7 +21,7 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unix.Close(fd)
+	defer syscall.Close(fd)
 
 	s, err := ConfigDump(fd)
 	if err != nil {
@@ -37,7 +36,7 @@ func TestCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unix.Close(cfd)
+	defer syscall.Close(cfd)
 
 	err = SetBusMaster(cfd)
 	if err != nil {
@@ -45,7 +44,7 @@ func TestCap(t *testing.T) {
 	}
 
 	buf := [2]byte{}
-	n, err := unix.Pread(cfd, buf[:1], int64(CapList))
+	n, err := syscall.Pread(cfd, buf[:1], int64(CapList))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func TestCap(t *testing.T) {
 	pos := buf[0]
 	log.Printf("pos: %x\n", pos)
 
-	n, err = unix.Pread(cfd, buf[:], int64(pos))
+	n, err = syscall.Pread(cfd, buf[:], int64(pos))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +91,7 @@ func TestMapResource(t *testing.T) {
 				t.Fatal(err)
 			}
 			log.Printf("buf:\n%s", hex.Dump(buf))
-			unix.Munmap(buf)
+			syscall.Munmap(buf)
 		case ResourceTypeReg:
 		case ResourceTypeIRQ:
 		case ResourceTypeDMA:
