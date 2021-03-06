@@ -4,8 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 type Addr struct {
@@ -60,12 +59,12 @@ type Resource struct {
 type ResourceType uint64
 
 const (
-	ResourceTypeIO ResourceType = 0x0100
-	ResourceTypeMem = 0x0200
-	ResourceTypeReg = 0x0300
-	ResourceTypeIRQ = 0x0400
-	ResourceTypeDMA = 0x0800
-	ResourceTypeBus = 0x1000
+	ResourceTypeIO  ResourceType = 0x0100
+	ResourceTypeMem              = 0x0200
+	ResourceTypeReg              = 0x0300
+	ResourceTypeIRQ              = 0x0400
+	ResourceTypeDMA              = 0x0800
+	ResourceTypeBus              = 0x1000
 )
 
 func (t ResourceType) String() string {
@@ -93,13 +92,13 @@ func (r *Resource) Type() ResourceType {
 
 func (r *Resource) Map() ([]byte, error) {
 	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/resource%v", r.Addr, r.Index)
-	fd, err := unix.Open(fname, unix.O_RDWR, 0)
+	fd, err := syscall.Open(fname, syscall.O_RDWR, 0)
 	if err != nil {
 		return []byte{}, err
 	}
-	defer unix.Close(fd)
+	defer syscall.Close(fd)
 
 	size := int(r.End - r.Phys + 1)
-	prot := unix.PROT_READ | unix.PROT_WRITE
-	return unix.Mmap(fd, 0, size, prot, unix.MAP_SHARED)
+	prot := syscall.PROT_READ | syscall.PROT_WRITE
+	return syscall.Mmap(fd, 0, size, prot, syscall.MAP_SHARED)
 }

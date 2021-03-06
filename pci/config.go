@@ -3,13 +3,12 @@ package pci
 import (
 	"encoding/hex"
 	"fmt"
+	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
-	Command = 0x04
+	Command              = 0x04
 	CommandMaster uint16 = 0x4
 
 	CapList = 0x34
@@ -17,12 +16,12 @@ const (
 
 func ConfigOpen() (int, error) {
 	fname := "/sys/class/uio/uio0/device/config"
-	return unix.Open(fname, unix.O_RDWR, 0)
+	return syscall.Open(fname, syscall.O_RDWR, 0)
 }
 
 func ConfigDump(fd int) (string, error) {
 	buf := [64]byte{}
-	n, err := unix.Pread(fd, buf[:], 0)
+	n, err := syscall.Pread(fd, buf[:], 0)
 	if err != nil {
 		return "", err
 	}
@@ -35,7 +34,7 @@ func ConfigDump(fd int) (string, error) {
 
 func SetBusMaster(fd int) error {
 	buf := [2]byte{}
-	n, err := unix.Pread(fd, buf[:], int64(Command))
+	n, err := syscall.Pread(fd, buf[:], int64(Command))
 	if err != nil {
 		return err
 	}
@@ -45,9 +44,9 @@ func SetBusMaster(fd int) error {
 
 	reg := (*uint16)(unsafe.Pointer(&buf[0]))
 
-	if *reg & CommandMaster == 0 {
+	if *reg&CommandMaster == 0 {
 		*reg |= CommandMaster
-		_, err := unix.Pwrite(fd, buf[:], int64(Command))
+		_, err := syscall.Pwrite(fd, buf[:], int64(Command))
 		if err != nil {
 			return err
 		}

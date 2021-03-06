@@ -8,7 +8,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-
 func TestDevUIO(t *testing.T) {
 	fname := "/dev/uio0"
 	fd, err := unix.Open(fname, unix.O_RDWR, 0)
@@ -71,11 +70,11 @@ func TestCap(t *testing.T) {
 }
 
 func TestMapResource(t *testing.T) {
-	addr := &Addr {
+	addr := &Addr{
 		Domain: 0,
-		Bus: 0,
-		ID: 9,
-		Func: 0,
+		Bus:    0,
+		ID:     9,
+		Func:   0,
 	}
 	rs, err := addr.ScanResources()
 	if err != nil {
