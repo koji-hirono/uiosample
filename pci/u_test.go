@@ -1,7 +1,6 @@
 package pci
 
 import (
-	"encoding/hex"
 	"log"
 	"syscall"
 	"testing"
@@ -17,13 +16,13 @@ func TestDevUIO(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	fd, err := ConfigOpen()
+	c, err := NewConfig(0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.Close(fd)
+	defer c.Close()
 
-	s, err := ConfigDump(fd)
+	s, err := c.Dump()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,38 +31,33 @@ func TestConfig(t *testing.T) {
 }
 
 func TestCap(t *testing.T) {
-	cfd, err := ConfigOpen()
+	c, err := NewConfig(0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.Close(cfd)
+	defer c.Close()
 
-	err = SetBusMaster(cfd)
+	err = c.SetBusMaster()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	buf := [2]byte{}
-	n, err := syscall.Pread(cfd, buf[:1], int64(CapList))
+	pos, err := c.Read8(CapList)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Fatal("n != 1")
-	}
-	pos := buf[0]
 	log.Printf("pos: %x\n", pos)
 
-	n, err = syscall.Pread(cfd, buf[:], int64(pos))
+	vndr, err := c.Read8(int(pos))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatal("n != 2")
+
+	next, err := c.Read8(int(pos+1))
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	vndr := buf[0]
-	next := buf[1]
 	log.Printf("vndr: %x\n", vndr)
 	log.Printf("next: %x\n", next)
 }
@@ -72,30 +66,17 @@ func TestMapResource(t *testing.T) {
 	addr := &Addr{
 		Domain: 0,
 		Bus:    0,
-		ID:     9,
+		ID:     10,
 		Func:   0,
 	}
-	rs, err := addr.ScanResources()
+	device, err := NewDevice(addr, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	for _, r := range rs {
-		typ := r.Type()
-		log.Printf("Type: %s\n", typ)
-		switch typ {
-		case ResourceTypeIO:
-		case ResourceTypeMem:
-			buf, err := r.Map()
-			if err != nil {
-				t.Fatal(err)
-			}
-			log.Printf("buf:\n%s", hex.Dump(buf))
-			syscall.Munmap(buf)
-		case ResourceTypeReg:
-		case ResourceTypeIRQ:
-		case ResourceTypeDMA:
-		case ResourceTypeBus:
+	for i, res := range device.Ress {
+		log.Printf("Res[%v]:\n", i)
+		if res != nil {
+			log.Printf("0000: 0x%08x\n", res.Read32(0))
 		}
 	}
 }

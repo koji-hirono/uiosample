@@ -1,10 +1,10 @@
 package pci
 
 import (
-	"bufio"
+	"encoding/binary"
 	"fmt"
-	"os"
 	"syscall"
+	"unsafe"
 )
 
 type Addr struct {
@@ -18,39 +18,7 @@ func (a *Addr) String() string {
 	return fmt.Sprintf("%04x:%02x:%02x.%01x", a.Domain, a.Bus, a.ID, a.Func)
 }
 
-func (a *Addr) ScanResources() ([]Resource, error) {
-	rs := []Resource{}
-	fname := "/sys/bus/pci/devices/" + a.String() + "/resource"
-	f, err := os.Open(fname)
-	if err != nil {
-		return rs, err
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	i := 0
-	for s.Scan() {
-		r := &Resource{Addr: a, Index: i}
-		n, err := fmt.Sscanf(s.Text(), "0x%x 0x%x 0x%x",
-			&r.Phys, &r.End, &r.Flags)
-		if err != nil {
-			return rs, err
-		}
-		if n != 3 {
-			return rs, fmt.Errorf("n != 3")
-		}
-		if r.Phys != 0 {
-			rs = append(rs, *r)
-		}
-		i++
-	}
-
-	return rs, nil
-}
-
-type Resource struct {
-	Addr  *Addr
-	Index int
+type ResourceInfo struct {
 	Phys  uint64
 	End   uint64
 	Flags uint64
@@ -86,19 +54,86 @@ func (t ResourceType) String() string {
 	}
 }
 
-func (r *Resource) Type() ResourceType {
+func (r *ResourceInfo) Type() ResourceType {
 	return ResourceType(r.Flags & 0x1f00)
 }
 
-func (r *Resource) Map() ([]byte, error) {
-	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/resource%v", r.Addr, r.Index)
+type Resource interface {
+	Read32(int) uint32
+	Write32(int, uint32, uint32)
+	Close() error
+}
+
+type MemResource struct {
+	b []byte
+}
+
+func NewMemResource(addr *Addr, index int, info *ResourceInfo) (*MemResource, error) {
+	r := new(MemResource)
+	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/resource%v", addr, index)
 	fd, err := syscall.Open(fname, syscall.O_RDWR, 0)
 	if err != nil {
-		return []byte{}, err
+		return r, err
 	}
 	defer syscall.Close(fd)
 
-	size := int(r.End - r.Phys + 1)
+	size := int(info.End - info.Phys + 1)
 	prot := syscall.PROT_READ | syscall.PROT_WRITE
-	return syscall.Mmap(fd, 0, size, prot, syscall.MAP_SHARED)
+	b, err := syscall.Mmap(fd, 0, size, prot, syscall.MAP_SHARED)
+	if err != nil {
+		return r, err
+	}
+	r.b = b
+
+	return r, nil
+}
+
+func (r *MemResource) Close() error {
+	return syscall.Munmap(r.b)
+}
+
+func (r *MemResource) Read32(off int) uint32 {
+	return *(*uint32)(unsafe.Pointer(&r.b[off]))
+}
+
+func (r *MemResource) Write32(off int, val uint32, mask uint32) {
+	d := (*uint32)(unsafe.Pointer(&r.b[off]))
+	*d = (*d & ^mask) | (val & mask)
+}
+
+
+type IOResource struct {
+	fd int
+}
+
+func NewIOResource(addr *Addr, index int, info *ResourceInfo) (*IOResource, error) {
+	r := new(IOResource)
+	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/resource%v", addr, index)
+	fd, err := syscall.Open(fname, syscall.O_RDWR, 0)
+	if err != nil {
+		return r, err
+	}
+	r.fd = fd
+	return r, nil
+}
+
+func (r *IOResource) Close() error {
+	return syscall.Close(r.fd)
+}
+
+func (r *IOResource) Read32(off int) uint32 {
+	b := make([]byte, 4)
+	_, err := syscall.Pread(r.fd, b, int64(off))
+	if err != nil {
+		return 0
+	}
+	return binary.LittleEndian.Uint32(b)
+}
+
+func (r *IOResource) Write32(off int, val uint32, mask uint32) {
+	d := r.Read32(off)
+	d = (d & ^mask) | (val & mask)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, d)
+	syscall.Pwrite(r.fd, b, int64(off))
 }

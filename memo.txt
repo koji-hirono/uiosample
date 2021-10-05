@@ -1,0 +1,56 @@
+
+
+
+Am79C970A
+Am79C973
+
+82540EM
+82545EM
+
+82543GC
+
+virtio-net
+
+eggos
+
+
+enp0s3:
+	Net: Nat
+	Mac: 08:00:27:78:0e:c3
+	Driver: e1000
+	Device: 82543GC
+	Bus: 0000:00:03.0
+
+enp0s8:
+	Net: HostOnly vboxnet0
+	Mac: 08:00:27:93:b2:12
+	Driver: e1000
+	Device: 82543GC
+	Bus: 0000:00:08.0
+
+enp0s9:
+	Net: intnet
+	Mac: 08:00:27:d6:52.7e
+	Driver: e1000
+	Device: 82545EM
+	Bus: 0000:00:09.0
+enp0s10:
+	Net: intnet
+	Mac: 08:00:27:1d:05:b8
+	Driver: e1000
+	Device: 82545EM
+	Bus: 0000:00:0a.0
+
+enp0s16:
+	Net: intnet-dn
+	Mac: 08:00:27:d4:c8:f8
+	Driver: e1000
+	Device: 82545EM
+	Bus: 0000:00:10.0
+enp0s17:
+	Net: intnet-dn
+	Mac: 08:00:27:d1:29:ba
+	Driver: e1000
+	Device: 82545EM
+	Bus: 0000:00:11.0
+
