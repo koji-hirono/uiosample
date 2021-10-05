@@ -60,7 +60,8 @@ func (r *ResourceInfo) Type() ResourceType {
 
 type Resource interface {
 	Read32(int) uint32
-	Write32(int, uint32, uint32)
+	Write32(int, uint32)
+	MaskWrite32(int, uint32, uint32)
 	Close() error
 }
 
@@ -96,7 +97,12 @@ func (r *MemResource) Read32(off int) uint32 {
 	return *(*uint32)(unsafe.Pointer(&r.b[off]))
 }
 
-func (r *MemResource) Write32(off int, val uint32, mask uint32) {
+func (r *MemResource) Write32(off int, val uint32) {
+	d := (*uint32)(unsafe.Pointer(&r.b[off]))
+	*d = val
+}
+
+func (r *MemResource) MaskWrite32(off int, val uint32, mask uint32) {
 	d := (*uint32)(unsafe.Pointer(&r.b[off]))
 	*d = (*d & ^mask) | (val & mask)
 }
@@ -130,7 +136,13 @@ func (r *IOResource) Read32(off int) uint32 {
 	return binary.LittleEndian.Uint32(b)
 }
 
-func (r *IOResource) Write32(off int, val uint32, mask uint32) {
+func (r *IOResource) Write32(off int, val uint32) {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, val)
+	syscall.Pwrite(r.fd, b, int64(off))
+}
+
+func (r *IOResource) MaskWrite32(off int, val uint32, mask uint32) {
 	d := r.Read32(off)
 	d = (d & ^mask) | (val & mask)
 	b := make([]byte, 4)

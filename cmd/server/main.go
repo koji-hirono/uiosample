@@ -50,8 +50,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rxn := 2
-	txn := 2
+	// rxn >= 8
+	// txn >= 8
+	rxn := 8
+	txn := 8
 	d := e1000.NewDriver(dev, rxn, txn)
 	d.Init()
 

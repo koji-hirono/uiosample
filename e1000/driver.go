@@ -30,11 +30,11 @@ func (d *Driver) RegRead(reg int) uint32 {
 }
 
 func (d *Driver) RegWrite(reg int, val uint32) {
-	d.Dev.Ress[0].Write32(reg, val, ^uint32(0))
+	d.Dev.Ress[0].Write32(reg, val)
 }
 
 func (d *Driver) RegMaskWrite(reg int, val, mask uint32) {
-	d.Dev.Ress[0].Write32(reg, val, mask)
+	d.Dev.Ress[0].MaskWrite32(reg, val, mask)
 }
 
 func (d *Driver) IntrDisable() {
@@ -66,7 +66,11 @@ func (d *Driver) IntrEnable() {
 
 func (d *Driver) Reset() {
 	d.RegMaskWrite(CTRL, CTRL_RST, CTRL_RST)
-	time.Sleep(time.Millisecond * 500)
+	log.Println("reset...")
+	// time.Sleep(time.Millisecond * 500)
+	for d.RegRead(CTRL) & CTRL_RST != 0 {
+	}
+	log.Println("reset done")
 }
 
 func (d *Driver) GlobalConfiguration() {
@@ -95,7 +99,8 @@ func (d *Driver) InitStatRegs() {
 }
 
 func (d *Driver) LinkUp() {
-	d.RegMaskWrite(CTRL, CTRL_SLU, CTRL_SLU)
+	v := CTRL_SLU | CTRL_ASDE
+	d.RegMaskWrite(CTRL, v, v)
 	log.Println("waiting linkup.")
 	for {
 		status := d.RegRead(STATUS)
@@ -110,10 +115,12 @@ func (d *Driver) LinkUp() {
 func (d *Driver) InitRx() {
 	addr := d.InitRxBuf()
 
-	d.RegWrite(RDLEN, uint32(d.NumRxDesc*SizeofTxDesc))
-
 	d.RegWrite(RDBAL, uint32(addr))
 	d.RegWrite(RDBAH, uint32(addr>>32))
+
+	d.RegWrite(RDLEN, uint32(d.NumRxDesc*SizeofTxDesc))
+	log.Printf("RDLEN_: %v\n", uint32(d.NumRxDesc * SizeofTxDesc))
+	log.Printf("RDLEN: %v\n", d.RegRead(RDLEN))
 
 	d.RegWrite(RDH, 0)
 	d.RegWrite(RDT, uint32(d.NumRxDesc-1))
@@ -137,6 +144,7 @@ func (d *Driver) InitTx() {
 	d.RegWrite(TDBAH, uint32(addr>>32))
 
 	d.RegWrite(TDLEN, uint32(d.NumTxDesc*SizeofTxDesc))
+	log.Printf("TDLEN: %v\n", d.RegRead(TDLEN))
 	d.RegWrite(TDH, 0)
 	d.RegWrite(TDT, 0)
 
@@ -229,6 +237,13 @@ func (d *Driver) InitTxBuf() uintptr {
 }
 
 func (d *Driver) Init() {
+	if unsafe.Sizeof(RxDesc{}) != 16 {
+		panic("bad rxdesc size")
+	}
+	if unsafe.Sizeof(TxDesc{}) != 16 {
+		panic("bad txdesc size")
+	}
+
 	// 1. Disable Interrupts
 	d.IntrDisable()
 
@@ -251,6 +266,7 @@ func (d *Driver) Init() {
 
 	// 7. Enable Interrupts (if not pollmode)
 	// enable_interrupt(dev)
+	d.IntrEnable()
 
 	// clear pending intrs
 	d.RegRead(ICR)
@@ -332,17 +348,18 @@ func (d *Driver) Rx(i int) ([]byte, int) {
 func (d *Driver) Serve(ch chan []byte) {
 	i := 0
 	for {
-		rdt := d.RegRead(RDT)
-		log.Printf("RDT: %v\n", rdt)
+		log.Printf("RDT: %v\n", d.RegRead(RDT))
+		log.Printf("ICR: %v\n", d.RegRead(ICR))
+		/*
 		for j := 0; j < d.NumRxDesc; j++ {
 			log.Printf("RxDesc[%v]: %#+v\n", j, d.RxRing[j])
 		}
+		*/
 		if d.RxRing[i].Status&RxStatusDD != 0 {
 			pkt, next := d.Rx(i)
 			i = next
 			ch <- pkt
 		}
-		/*
 			log.Printf("MPC  : %v\n", d.RegRead(MPC))
 			log.Printf("GPRC : %v\n", d.RegRead(GPRC))
 			log.Printf("GPTC : %v\n", d.RegRead(GPTC))
@@ -351,7 +368,6 @@ func (d *Driver) Serve(ch chan []byte) {
 			log.Printf("GOTCL: %v\n", d.RegRead(GOTCL))
 			log.Printf("GOTCH: %v\n", d.RegRead(GOTCH))
 			log.Printf("RxBuf(%v): %x\n", i, d.RxBuf[i][:60])
-		*/
 
 		time.Sleep(time.Millisecond * 500)
 	}
