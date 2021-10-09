@@ -3,7 +3,6 @@ package hugetlb
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"syscall"
 	"unsafe"
@@ -37,7 +36,6 @@ func VirtToPhys(p uintptr) (uintptr, error) {
 
 	pagesize := uintptr(os.Getpagesize())
 	off := p / pagesize * 8
-	log.Printf("off: %x\n", off)
 	buf := [8]byte{}
 	n, err := f.ReadAt(buf[:], int64(off))
 	if err != nil {
@@ -47,10 +45,7 @@ func VirtToPhys(p uintptr) (uintptr, error) {
 		return 0, fmt.Errorf("to few read")
 	}
 
-	log.Printf("buf: %x\n", buf)
-
 	addr := (*uintptr)(unsafe.Pointer(&buf[0]))
-	log.Printf("addr: %x\n", *addr)
 	return (*addr&0x007fffffffffffff)*pagesize + p%pagesize, nil
 }
 
