@@ -223,20 +223,22 @@ func (d *Driver) InitTxBuf() (uintptr, error) {
 
 	d.TxBuf = make([][]byte, d.NumTxDesc)
 
-	for i := 0; i < d.NumTxDesc; i++ {
-		size := 2048
-		buf, err := hugetlb.Alloc(size)
-		if err != nil {
-			return 0, err
+	/*
+		for i := 0; i < d.NumTxDesc; i++ {
+			size := 2048
+			buf, err := hugetlb.Alloc(size)
+			if err != nil {
+				return 0, err
+			}
+			d.TxBuf[i] = buf
+			virt := uintptr(unsafe.Pointer(&buf[0]))
+			phys, err := hugetlb.VirtToPhys(virt)
+			if err != nil {
+				return 0, err
+			}
+			d.TxRing[i].Addr = phys
 		}
-		d.TxBuf[i] = buf
-		virt := uintptr(unsafe.Pointer(&buf[0]))
-		phys, err := hugetlb.VirtToPhys(virt)
-		if err != nil {
-			return 0, err
-		}
-		d.TxRing[i].Addr = phys
-	}
+	*/
 
 	virt := uintptr(unsafe.Pointer(&desc[0]))
 	phys, err := hugetlb.VirtToPhys(virt)
@@ -319,7 +321,16 @@ func (d *Driver) Tx(pkt []byte) int {
 		return 0
 	}
 
-	n := copy(d.TxBuf[tdt], pkt)
+	// n := copy(d.TxBuf[tdt], pkt)
+	n := len(pkt)
+	d.TxBuf[tdt] = pkt
+	virt := uintptr(unsafe.Pointer(&pkt[0]))
+	phys, err := hugetlb.VirtToPhys(virt)
+	if err != nil {
+		return 0
+	}
+	d.TxRing[tdt].Addr = phys
+
 	d.TxRing[tdt].Length = uint16(n)
 	cmd := TxCommandEOP
 	cmd |= TxCommandIFCS
@@ -336,6 +347,11 @@ func (d *Driver) Tx(pkt []byte) int {
 	for d.TxRing[tdt].Status == 0 {
 		// d.logf("Tx status: %x\n", d.TxRing[tdt].Status)
 	}
+
+	// clear
+	hugetlb.Free(pkt)
+	d.TxBuf[tdt] = nil
+	d.TxRing[tdt].Addr = 0
 	return n
 }
 
