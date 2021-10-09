@@ -51,15 +51,11 @@ func VirtToPhys(p uintptr) (uintptr, error) {
 
 	addr := (*uintptr)(unsafe.Pointer(&buf[0]))
 	log.Printf("addr: %x\n", *addr)
-	return (*addr & 0x007fffffffffffff) * pagesize + p % pagesize, nil
+	return (*addr&0x007fffffffffffff)*pagesize + p%pagesize, nil
 }
 
-/*
 func PageAlloc(n int) ([]byte, error) {
 	size := n * 2 * 1024 * 1024
-	*/
-func Alloc(size int) ([]byte, error) {
-
 	prot := syscall.PROT_READ | syscall.PROT_WRITE
 	flags := syscall.MAP_PRIVATE | syscall.MAP_ANONYMOUS | syscall.MAP_HUGETLB
 	buf, err := syscall.Mmap(-1, 0, size, prot, flags)
@@ -73,7 +69,7 @@ func Alloc(size int) ([]byte, error) {
 	return buf, nil
 }
 
-func Free(b []byte) {
+func PageFree(b []byte) {
 	syscall.Munmap(b)
 }
 
@@ -81,7 +77,6 @@ var PoolSizeList = [...]int{64, 128, 256, 512, 1024, 2048, 4096, 8192}
 var PoolTable map[int]*Pool
 
 func Init() {
-	/*
 	PoolTable = make(map[int]*Pool)
 	for _, unit := range PoolSizeList {
 		b, err := PageAlloc(1)
@@ -90,11 +85,9 @@ func Init() {
 		}
 		PoolTable[unit] = NewPool(b, unit)
 	}
-	*/
 }
 
-func hogeAlloc(size int) ([]byte, error) {
-	/*
+func Alloc(size int) ([]byte, error) {
 	for _, unit := range PoolSizeList {
 		if size <= unit {
 			p, ok := PoolTable[unit]
@@ -108,16 +101,11 @@ func hogeAlloc(size int) ([]byte, error) {
 			return b, nil
 		}
 	}
-	*/
-	/*
 	n := (size / (2 * 1024 * 1024)) + 1
 	return PageAlloc(n)
-	*/
-	return nil, nil
 }
 
-func hogeFree(b []byte) {
-	/*
+func Free(b []byte) {
 	size := cap(b)
 	for _, unit := range PoolSizeList {
 		if size <= unit {
@@ -130,5 +118,4 @@ func hogeFree(b []byte) {
 		}
 	}
 	PageFree(b)
-	*/
 }

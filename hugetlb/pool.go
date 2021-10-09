@@ -29,7 +29,7 @@ func (p *Pool) Get() ([]byte, bool) {
 		hdr.Len = p.unit
 		return b, true
 	}
-	if p.used + p.unit < len(p.b) {
+	if p.used+p.unit < len(p.b) {
 		b := p.b[p.used : p.used+p.unit]
 		p.used += p.unit
 		return b, true
