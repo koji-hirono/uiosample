@@ -12,6 +12,7 @@ import (
 
 type Driver struct {
 	Dev       *pci.Device
+	Logger    *log.Logger
 	NumRxDesc int
 	NumTxDesc int
 	RxBuf     [][]byte
@@ -21,8 +22,17 @@ type Driver struct {
 	Mac       []byte
 }
 
-func NewDriver(dev *pci.Device, nrxd, ntxd int) *Driver {
-	return &Driver{Dev: dev, NumRxDesc: nrxd, NumTxDesc: ntxd}
+func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) *Driver {
+	d := new(Driver)
+	d.Dev = dev
+	if logger == nil {
+		d.Logger = log.Default()
+	} else {
+		d.Logger = logger
+	}
+	d.NumRxDesc = nrxd
+	d.NumTxDesc = ntxd
+	return d
 }
 
 func (d *Driver) RegRead(reg int) uint32 {
@@ -35,6 +45,10 @@ func (d *Driver) RegWrite(reg int, val uint32) {
 
 func (d *Driver) RegMaskWrite(reg int, val, mask uint32) {
 	d.Dev.Ress[0].MaskWrite32(reg, val, mask)
+}
+
+func (d *Driver) logf(format string, v ...interface{}) {
+	d.Logger.Printf(format, v...)
 }
 
 func (d *Driver) IntrDisable() {
@@ -66,11 +80,11 @@ func (d *Driver) IntrEnable() {
 
 func (d *Driver) Reset() {
 	d.RegMaskWrite(CTRL, CTRL_RST, CTRL_RST)
-	log.Println("reset...")
+	d.logf("reset...\n")
 	// time.Sleep(time.Millisecond * 500)
-	for d.RegRead(CTRL) & CTRL_RST != 0 {
+	for d.RegRead(CTRL)&CTRL_RST != 0 {
 	}
-	log.Println("reset done")
+	d.logf("reset done\n")
 }
 
 func (d *Driver) GlobalConfiguration() {
@@ -101,7 +115,7 @@ func (d *Driver) InitStatRegs() {
 func (d *Driver) LinkUp() {
 	v := CTRL_SLU | CTRL_ASDE
 	d.RegMaskWrite(CTRL, v, v)
-	log.Println("waiting linkup.")
+	d.logf("waiting linkup.\n")
 	for {
 		status := d.RegRead(STATUS)
 		if status&0x2 == 0x2 {
@@ -109,18 +123,19 @@ func (d *Driver) LinkUp() {
 		}
 		time.Sleep(time.Millisecond * 500)
 	}
-	log.Println("done.")
+	d.logf("done.\n")
 }
 
-func (d *Driver) InitRx() {
-	addr := d.InitRxBuf()
+func (d *Driver) InitRx() error {
+	addr, err := d.InitRxBuf()
+	if err != nil {
+		return err
+	}
 
 	d.RegWrite(RDBAL, uint32(addr))
 	d.RegWrite(RDBAH, uint32(addr>>32))
 
 	d.RegWrite(RDLEN, uint32(d.NumRxDesc*SizeofTxDesc))
-	log.Printf("RDLEN_: %v\n", uint32(d.NumRxDesc * SizeofTxDesc))
-	log.Printf("RDLEN: %v\n", d.RegRead(RDLEN))
 
 	d.RegWrite(RDH, 0)
 	d.RegWrite(RDT, uint32(d.NumRxDesc-1))
@@ -135,16 +150,19 @@ func (d *Driver) InitRx() {
 	val |= RCTL_BSEX  // Buffer Size Extension
 	val |= RCTL_SECRC // Strip Ethernet CRC from incoming packet
 	d.RegWrite(RCTL, val)
+	return nil
 }
 
-func (d *Driver) InitTx() {
-	addr := d.InitTxBuf()
+func (d *Driver) InitTx() error {
+	addr, err := d.InitTxBuf()
+	if err != nil {
+		return err
+	}
 
 	d.RegWrite(TDBAL, uint32(addr))
 	d.RegWrite(TDBAH, uint32(addr>>32))
 
 	d.RegWrite(TDLEN, uint32(d.NumTxDesc*SizeofTxDesc))
-	log.Printf("TDLEN: %v\n", d.RegRead(TDLEN))
 	d.RegWrite(TDH, 0)
 	d.RegWrite(TDT, 0)
 
@@ -152,14 +170,14 @@ func (d *Driver) InitTx() {
 	val := TCTL_EN  // Enable
 	val |= TCTL_PSP // Pad short packets
 	d.RegWrite(TCTL, val)
+	return nil
 }
 
-func (d *Driver) InitRxBuf() uintptr {
+func (d *Driver) InitRxBuf() (uintptr, error) {
 	size := d.NumRxDesc * SizeofRxDesc
 	desc, err := hugetlb.Alloc(size)
 	if err != nil {
-		log.Println(err)
-		return 0
+		return 0, err
 	}
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&d.RxRing))
 	hdr.Data = uintptr(unsafe.Pointer(&desc[0]))
@@ -169,18 +187,16 @@ func (d *Driver) InitRxBuf() uintptr {
 	d.RxBuf = make([][]byte, d.NumRxDesc)
 
 	for i := 0; i < d.NumRxDesc; i++ {
-		size := 4096
+		size := 2048
 		buf, err := hugetlb.Alloc(size)
 		if err != nil {
-			log.Println(err)
-			return 0
+			return 0, err
 		}
 		d.RxBuf[i] = buf
 		virt := uintptr(unsafe.Pointer(&buf[0]))
 		phys, err := hugetlb.VirtToPhys(virt)
 		if err != nil {
-			log.Println(err)
-			return 0
+			return 0, err
 		}
 		d.RxRing[i].Addr = phys
 	}
@@ -188,19 +204,17 @@ func (d *Driver) InitRxBuf() uintptr {
 	virt := uintptr(unsafe.Pointer(&desc[0]))
 	phys, err := hugetlb.VirtToPhys(virt)
 	if err != nil {
-		log.Println(err)
-		return 0
+		return 0, err
 	}
 
-	return phys
+	return phys, nil
 }
 
-func (d *Driver) InitTxBuf() uintptr {
+func (d *Driver) InitTxBuf() (uintptr, error) {
 	size := d.NumTxDesc * SizeofTxDesc
 	desc, err := hugetlb.Alloc(size)
 	if err != nil {
-		log.Println(err)
-		return 0
+		return 0, err
 	}
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&d.TxRing))
 	hdr.Data = (uintptr)(unsafe.Pointer(&desc[0]))
@@ -210,18 +224,16 @@ func (d *Driver) InitTxBuf() uintptr {
 	d.TxBuf = make([][]byte, d.NumTxDesc)
 
 	for i := 0; i < d.NumTxDesc; i++ {
-		size := 4096
+		size := 2048
 		buf, err := hugetlb.Alloc(size)
 		if err != nil {
-			log.Println(err)
-			return 0
+			return 0, err
 		}
 		d.TxBuf[i] = buf
 		virt := uintptr(unsafe.Pointer(&buf[0]))
 		phys, err := hugetlb.VirtToPhys(virt)
 		if err != nil {
-			log.Println(err)
-			return 0
+			return 0, err
 		}
 		d.TxRing[i].Addr = phys
 	}
@@ -229,21 +241,13 @@ func (d *Driver) InitTxBuf() uintptr {
 	virt := uintptr(unsafe.Pointer(&desc[0]))
 	phys, err := hugetlb.VirtToPhys(virt)
 	if err != nil {
-		log.Println(err)
-		return 0
+		return 0, err
 	}
 
-	return phys
+	return phys, nil
 }
 
-func (d *Driver) Init() {
-	if unsafe.Sizeof(RxDesc{}) != 16 {
-		panic("bad rxdesc size")
-	}
-	if unsafe.Sizeof(TxDesc{}) != 16 {
-		panic("bad txdesc size")
-	}
-
+func (d *Driver) Init() error {
 	// 1. Disable Interrupts
 	d.IntrDisable()
 
@@ -259,14 +263,19 @@ func (d *Driver) Init() {
 	d.InitStatRegs()
 
 	// 5. Initialize Receive
-	d.InitRx()
+	err := d.InitRx()
+	if err != nil {
+		return err
+	}
 
 	// 6. Initialize Transmit
-	d.InitTx()
+	err = d.InitTx()
+	if err != nil {
+		return err
+	}
 
 	// 7. Enable Interrupts (if not pollmode)
-	// enable_interrupt(dev)
-	d.IntrEnable()
+	// d.IntrEnable()
 
 	// clear pending intrs
 	d.RegRead(ICR)
@@ -282,31 +291,32 @@ func (d *Driver) Init() {
 	mac[3] = byte(ral0 >> 24)
 	mac[4] = byte(rah0)
 	mac[5] = byte(rah0 >> 8)
-	log.Printf("MAC Address: %x\n", mac)
+	d.logf("MAC Address: %x\n", mac)
 	d.Mac = mac
 
 	ctrl := d.RegRead(CTRL)
-	log.Printf("CTRL   : %08x\n", ctrl)
+	d.logf("CTRL   : %08x\n", ctrl)
 	status := d.RegRead(STATUS)
-	log.Printf("STATUS : %08x\n", status)
-	log.Printf("  FD   : %x\n", status&0x1)
-	log.Printf("  LU   : %x\n", (status>>1)&0x1)
-	log.Printf("  SPEED: %x\n", (status>>6)&0x3)
-	log.Printf("RCTL   : %08x\n", d.RegRead(RCTL))
-	log.Printf("RDBAL  : %08x\n", d.RegRead(RDBAL))
-	log.Printf("RDBAH  : %08x\n", d.RegRead(RDBAH))
-	log.Printf("RDLEN  : %08x\n", d.RegRead(RDLEN))
-	log.Printf("TCTL   : %08x\n", d.RegRead(TCTL))
-	log.Printf("TDBAL  : %08x\n", d.RegRead(TDBAL))
-	log.Printf("TDBAH  : %08x\n", d.RegRead(TDBAH))
-	log.Printf("TDLEN  : %08x\n", d.RegRead(TDLEN))
+	d.logf("STATUS : %08x\n", status)
+	d.logf("  FD   : %x\n", status&0x1)
+	d.logf("  LU   : %x\n", (status>>1)&0x1)
+	d.logf("  SPEED: %x\n", (status>>6)&0x3)
+	d.logf("RCTL   : %08x\n", d.RegRead(RCTL))
+	d.logf("RDBAL  : %08x\n", d.RegRead(RDBAL))
+	d.logf("RDBAH  : %08x\n", d.RegRead(RDBAH))
+	d.logf("RDLEN  : %08x\n", d.RegRead(RDLEN))
+	d.logf("TCTL   : %08x\n", d.RegRead(TCTL))
+	d.logf("TDBAL  : %08x\n", d.RegRead(TDBAL))
+	d.logf("TDBAH  : %08x\n", d.RegRead(TDBAH))
+	d.logf("TDLEN  : %08x\n", d.RegRead(TDLEN))
+	return err
 }
 
-func (d *Driver) Tx(pkt []byte) {
+func (d *Driver) Tx(pkt []byte) int {
 	tdt := d.RegRead(TDT)
 	tdh := d.RegRead(TDH)
 	if tdh == (tdt+1)%uint32(d.NumTxDesc) {
-		return
+		return 0
 	}
 
 	n := copy(d.TxBuf[tdt], pkt)
@@ -324,9 +334,9 @@ func (d *Driver) Tx(pkt []byte) {
 	d.RegWrite(TDT, (tdt+1)%uint32(d.NumTxDesc))
 
 	for d.TxRing[tdt].Status == 0 {
-		log.Printf("Tx status: %x\n", d.TxRing[tdt].Status)
+		// d.logf("Tx status: %x\n", d.TxRing[tdt].Status)
 	}
-	log.Printf("sned %v bytes\n", n)
+	return n
 }
 
 func (d *Driver) Rx(i int) ([]byte, int) {
@@ -348,27 +358,28 @@ func (d *Driver) Rx(i int) ([]byte, int) {
 func (d *Driver) Serve(ch chan []byte) {
 	i := 0
 	for {
-		log.Printf("RDT: %v\n", d.RegRead(RDT))
-		log.Printf("ICR: %v\n", d.RegRead(ICR))
 		/*
-		for j := 0; j < d.NumRxDesc; j++ {
-			log.Printf("RxDesc[%v]: %#+v\n", j, d.RxRing[j])
-		}
+			d.logf("RDT: %v\n", d.RegRead(RDT))
+			d.logf("ICR: %v\n", d.RegRead(ICR))
 		*/
 		if d.RxRing[i].Status&RxStatusDD != 0 {
 			pkt, next := d.Rx(i)
 			i = next
 			ch <- pkt
 		}
-			log.Printf("MPC  : %v\n", d.RegRead(MPC))
-			log.Printf("GPRC : %v\n", d.RegRead(GPRC))
-			log.Printf("GPTC : %v\n", d.RegRead(GPTC))
-			log.Printf("GORCL: %v\n", d.RegRead(GORCL))
-			log.Printf("GORCH: %v\n", d.RegRead(GORCH))
-			log.Printf("GOTCL: %v\n", d.RegRead(GOTCL))
-			log.Printf("GOTCH: %v\n", d.RegRead(GOTCH))
-			log.Printf("RxBuf(%v): %x\n", i, d.RxBuf[i][:60])
+		/*
+			d.logf("MPC  : %v\n", d.RegRead(MPC))
+			d.logf("GPRC : %v\n", d.RegRead(GPRC))
+			d.logf("GPTC : %v\n", d.RegRead(GPTC))
+			d.logf("GORCL: %v\n", d.RegRead(GORCL))
+			d.logf("GORCH: %v\n", d.RegRead(GORCH))
+			d.logf("GOTCL: %v\n", d.RegRead(GOTCL))
+			d.logf("GOTCH: %v\n", d.RegRead(GOTCH))
+			d.logf("RxBuf(%v): %x\n", i, d.RxBuf[i][:60])
+		*/
 
-		time.Sleep(time.Millisecond * 500)
+		/*
+			time.Sleep(time.Millisecond * 500)
+		*/
 	}
 }
