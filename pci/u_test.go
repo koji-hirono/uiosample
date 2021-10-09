@@ -53,7 +53,7 @@ func TestCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	next, err := c.Read8(int(pos+1))
+	next, err := c.Read8(int(pos + 1))
 	if err != nil {
 		t.Fatal(err)
 	}

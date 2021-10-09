@@ -107,7 +107,6 @@ func (r *MemResource) MaskWrite32(off int, val uint32, mask uint32) {
 	*d = (*d & ^mask) | (val & mask)
 }
 
-
 type IOResource struct {
 	fd int
 }
