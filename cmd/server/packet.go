@@ -51,7 +51,7 @@ func (d Data) Sum() uint32 {
 	n := len(d)
 	for i := 0; i < n; i += 2 {
 		x := uint32(d[i]) << 8
-		if i + 1 < n {
+		if i+1 < n {
 			x |= uint32(d[i+1])
 		}
 		sum += x
