@@ -4,13 +4,26 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path"
 	"strconv"
+	"syscall"
 	_ "time"
 
 	"uiosample/e1000"
 	"uiosample/hugetlb"
 	"uiosample/pci"
+)
+
+var (
+	bRx         = NewBench("Rx Packet")
+	bDecodeIPv4 = NewBench("Decode IPv4")
+	bDecodeICMP = NewBench("Decode ICMP")
+	bDecodeARP  = NewBench("Decode ARP")
+	bEncodeICMP = NewBench("Encode ICMP")
+	bEncodeARP  = NewBench("Encode ICMP")
+	bTxICMP     = NewBench("Tx ICMP")
+	bTxARP      = NewBench("Tx ARP")
 )
 
 func main() {
@@ -54,67 +67,87 @@ func main() {
 	// txn >= 8
 	rxn := 8
 	txn := 8
-	d := e1000.NewDriver(dev, rxn, txn)
+	d := e1000.NewDriver(dev, rxn, txn, nil)
 	d.Init()
 
 	ch := make(chan []byte, 1)
 	defer close(ch)
 	go d.Serve(ch)
 	/*
-	go func() {
-		for {
-			pkt := Packet{
-				EtherHdr{
-					Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-					Src:  d.Mac,
-					Type: EtherTypeARP,
-				},
-				ARPHdr{
-					HType: 1,
-					PType: 0x800,
-					HLen:  6,
-					PLen:  4,
-					Op:    ARPRequest,
-					SMac:  d.Mac,
-					SIP:   []byte{30,30,0,2},
-					TMac:  []byte{0,0,0,0,0,0},
-					TIP:   []byte{30,30,0,1},
-				},
+		go func() {
+			for {
+				pkt := Packet{
+					EtherHdr{
+						Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+						Src:  d.Mac,
+						Type: EtherTypeARP,
+					},
+					ARPHdr{
+						HType: 1,
+						PType: 0x800,
+						HLen:  6,
+						PLen:  4,
+						Op:    ARPRequest,
+						SMac:  d.Mac,
+						SIP:   []byte{30,30,0,2},
+						TMac:  []byte{0,0,0,0,0,0},
+						TIP:   []byte{30,30,0,1},
+					},
+				}
+				n := pkt.Len()
+				b := make([]byte, n)
+				err = pkt.Encode(b)
+				if err != nil {
+					continue
+				}
+				log.Printf("Tx: %x\n", b)
+				d.Tx(b)
+				time.Sleep(time.Second * 2)
 			}
-			n := pkt.Len()
-			b := make([]byte, n)
-			err = pkt.Encode(b)
-			if err != nil {
-				continue
-			}
-			log.Printf("Tx: %x\n", b)
-			d.Tx(b)
-			time.Sleep(time.Second * 2)
-		}
-	}()
+		}()
 	*/
-	for pkt := range ch {
-		log.Printf("Recv: %x\n", pkt)
-		eth, err := DecodeEtherHdr(pkt)
-		if err != nil {
-			continue
-		}
-		log.Printf("EtherHdr: %#+v\n", eth)
-		switch eth.Type {
-		case EtherTypeIPv4:
-			procIPv4(d, &eth, pkt[eth.Len():])
-		case EtherTypeARP:
-			procARP(d, &eth, pkt[eth.Len():])
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	for {
+		select {
+		case pkt := <-ch:
+			bRx.Start()
+			//log.Printf("Recv: %x\n", pkt)
+			eth, err := DecodeEtherHdr(pkt)
+			if err != nil {
+				break
+			}
+			//log.Printf("EtherHdr: %#+v\n", eth)
+			switch eth.Type {
+			case EtherTypeIPv4:
+				procIPv4(d, &eth, pkt[eth.Len():])
+			case EtherTypeARP:
+				procARP(d, &eth, pkt[eth.Len():])
+			}
+			bRx.End()
+		case <-sig:
+			bRx.Print()
+			bDecodeIPv4.Print()
+			bDecodeICMP.Print()
+			bDecodeARP.Print()
+			bEncodeICMP.Print()
+			bEncodeARP.Print()
+			bTxICMP.Print()
+			bTxARP.Print()
+			os.Exit(0)
 		}
 	}
 }
 
 func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+	bDecodeIPv4.Start()
 	ip, err := DecodeIPv4Hdr(payload)
 	if err != nil {
 		return err
 	}
-	log.Printf("IPv4Hdr: %#+v\n", ip)
+	//log.Printf("IPv4Hdr: %#+v\n", ip)
+	bDecodeIPv4.End()
 
 	switch ip.Proto {
 	case IPProtoICMP:
@@ -124,11 +157,12 @@ func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 }
 
 func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
+	bDecodeICMP.Start()
 	icmp, err := DecodeICMPHdr(payload)
 	if err != nil {
 		return err
 	}
-	log.Printf("ICMPHdr: %#+v\n", icmp)
+	//log.Printf("ICMPHdr: %#+v\n", icmp)
 	switch icmp.Type {
 	case ICMPTypeEchoRequest:
 	default:
@@ -138,7 +172,9 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 	if err != nil {
 		return err
 	}
-	log.Printf("ICMPEchoHdr: %#+v\n", echo)
+	//log.Printf("ICMPEchoHdr: %#+v\n", echo)
+	bDecodeICMP.End()
+	bEncodeICMP.Start()
 	txicmp := Packet{
 		ICMPHdr{
 			Type:   ICMPTypeEchoReply,
@@ -194,17 +230,23 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 	if err != nil {
 		return err
 	}
-	log.Printf("Tx: %x\n", b)
+	bEncodeICMP.End()
+	//log.Printf("Tx: %x\n", b)
+	bTxICMP.Start()
 	d.Tx(b)
+	bTxICMP.End()
 	return nil
 }
 
 func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+	bDecodeARP.Start()
 	arp, err := DecodeARPHdr(payload)
 	if err != nil {
 		return err
 	}
-	log.Printf("ARPHdr: %#+v\n", arp)
+	//log.Printf("ARPHdr: %#+v\n", arp)
+	bDecodeARP.End()
+	bEncodeARP.Start()
 	pkt := Packet{
 		EtherHdr{
 			Dst:  eth.Src,
@@ -230,7 +272,10 @@ func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Tx: %x\n", b)
+	bEncodeARP.End()
+	//log.Printf("Tx: %x\n", b)
+	bTxARP.Start()
 	d.Tx(b)
+	bTxARP.End()
 	return nil
 }
