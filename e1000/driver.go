@@ -10,6 +10,14 @@ import (
 	"uiosample/pci"
 )
 
+type Stat struct {
+	MPC  uint64 // Missed Packets Counts
+	GPRC uint64 // Good Packets Received Counts
+	GPTC uint64 // Good Packest Transmitted Count
+	GORC uint64 // Good Octets Received Count
+	GOTC uint64 // Good Octets Transmitted Count
+}
+
 type Driver struct {
 	Dev       *pci.Device
 	Logger    *log.Logger
@@ -384,18 +392,17 @@ func (d *Driver) Serve(ch chan []byte) {
 			ch <- pkt
 		}
 		/*
-			d.logf("MPC  : %v\n", d.RegRead(MPC))
-			d.logf("GPRC : %v\n", d.RegRead(GPRC))
-			d.logf("GPTC : %v\n", d.RegRead(GPTC))
-			d.logf("GORCL: %v\n", d.RegRead(GORCL))
-			d.logf("GORCH: %v\n", d.RegRead(GORCH))
-			d.logf("GOTCL: %v\n", d.RegRead(GOTCL))
-			d.logf("GOTCH: %v\n", d.RegRead(GOTCH))
-			d.logf("RxBuf(%v): %x\n", i, d.RxBuf[i][:60])
-		*/
-
-		/*
 			time.Sleep(time.Millisecond * 500)
 		*/
 	}
+}
+
+func (d *Driver) UpdateStat(stat *Stat) {
+	stat.MPC += uint64(d.RegRead(MPC))
+	stat.GPRC += uint64(d.RegRead(GPRC))
+	stat.GPTC += uint64(d.RegRead(GPTC))
+	stat.GORC += uint64(d.RegRead(GORCL))
+	stat.GORC += uint64(d.RegRead(GORCH)) << 32
+	stat.GOTC += uint64(d.RegRead(GOTCL))
+	stat.GOTC += uint64(d.RegRead(GOTCH)) << 32
 }

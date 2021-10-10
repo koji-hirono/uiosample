@@ -72,8 +72,8 @@ const (
 	GORCH = 0x408c
 
 	// Good Octets Transmitted Count
-	GOTCL = 0x4088
-	GOTCH = 0x408c
+	GOTCL = 0x4090
+	GOTCH = 0x4094
 
 	// Receive Address (MAC address)
 	RAL0 = 0x5400

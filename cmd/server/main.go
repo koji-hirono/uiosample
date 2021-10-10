@@ -85,6 +85,7 @@ func main() {
 		}()
 	*/
 
+	var stat e1000.Stat
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	for {
@@ -119,9 +120,19 @@ func main() {
 			bEncodeARP.Print()
 			bTxICMP.Print()
 			bTxARP.Print()
+			d.UpdateStat(&stat)
+			PrintStat(&stat)
 			os.Exit(0)
 		}
 	}
+}
+
+func PrintStat(stat *e1000.Stat) {
+	fmt.Printf("MPC : %v\n", stat.MPC)
+	fmt.Printf("GPRC: %v\n", stat.GPRC)
+	fmt.Printf("GPTC: %v\n", stat.GPTC)
+	fmt.Printf("GORC: %v\n", stat.GORC)
+	fmt.Printf("GOTC: %v\n", stat.GOTC)
 }
 
 func sendARPRequest(d *e1000.Driver) error {
