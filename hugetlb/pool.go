@@ -22,6 +22,7 @@ func NewPool(b []byte, unit int) *Pool {
 
 func (p *Pool) Get() ([]byte, bool) {
 	if e := p.free; e != nil {
+		p.free = e.next
 		var b []byte
 		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 		hdr.Data = uintptr(unsafe.Pointer(e))
@@ -29,7 +30,7 @@ func (p *Pool) Get() ([]byte, bool) {
 		hdr.Len = p.unit
 		return b, true
 	}
-	if p.used+p.unit < len(p.b) {
+	if p.used+p.unit <= len(p.b) {
 		b := p.b[p.used : p.used+p.unit]
 		p.used += p.unit
 		return b, true
