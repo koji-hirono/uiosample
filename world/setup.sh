@@ -23,5 +23,5 @@ modprobe uio_pci_generic
 
 echo "===> Bind"
 ip link set enp0s17 down
-./dpdk-devbind.py --bind uio_pci_generic 0000:00:11.0
-./dpdk-devbind.py --status
+driverctl set-override 0000:00:11.0 uio_pci_generic
+driverctl list-overrides
