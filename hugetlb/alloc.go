@@ -68,7 +68,7 @@ func PageFree(b []byte) {
 	syscall.Munmap(b)
 }
 
-var PoolSizeList = [...]int{64, 128, 256, 512, 1024, 2048, 4096, 8192}
+var PoolSizeList = [...]int{512, 1024, 2048, 4096, 8192}
 var PoolTable map[int]*Pool
 
 func Init() {
@@ -78,26 +78,47 @@ func Init() {
 		if err != nil {
 			continue
 		}
-		PoolTable[unit] = NewPool(b, unit)
+		virt := uintptr(unsafe.Pointer(&b[0]))
+		phys, err := VirtToPhys(virt)
+		if err != nil {
+			PageFree(b)
+			continue
+		}
+		PoolTable[unit] = NewPool(b, phys, unit)
 	}
 }
 
-func Alloc(size int) ([]byte, error) {
+func Alloc(size int) ([]byte, uintptr, error) {
 	for _, unit := range PoolSizeList {
 		if size <= unit {
 			p, ok := PoolTable[unit]
 			if !ok {
-				return nil, ErrOutOfMemory
+				return nil, 0, ErrOutOfMemory
 			}
 			b, ok := p.Get()
 			if !ok {
-				return nil, ErrOutOfMemory
+				return nil, 0, ErrOutOfMemory
 			}
-			return b, nil
+			phys, err := p.PhysAddr(b)
+			if err != nil {
+				p.Put(b)
+				return nil, 0, err
+			}
+			return b, phys, nil
 		}
 	}
 	n := (size / (2 * 1024 * 1024)) + 1
-	return PageAlloc(n)
+	b, err := PageAlloc(n)
+	if err != nil {
+		return nil, 0, err
+	}
+	virt := uintptr(unsafe.Pointer(&b[0]))
+	phys, err := VirtToPhys(virt)
+	if err != nil {
+		PageFree(b)
+		return nil, 0, err
+	}
+	return b, phys, nil
 }
 
 func Free(b []byte) {
@@ -113,4 +134,19 @@ func Free(b []byte) {
 		}
 	}
 	PageFree(b)
+}
+
+func PhysAddr(b []byte) (uintptr, error) {
+	size := cap(b)
+	for _, unit := range PoolSizeList {
+		if size <= unit {
+			p, ok := PoolTable[unit]
+			if !ok {
+				continue
+			}
+			return p.PhysAddr(b)
+		}
+	}
+	virt := uintptr(unsafe.Pointer(&b[0]))
+	return VirtToPhys(virt)
 }

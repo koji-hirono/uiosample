@@ -10,6 +10,7 @@ import (
 
 func TestDriver(t *testing.T) {
 	hugetlb.SetPages(128)
+	hugetlb.Init()
 
 	addr := &pci.Addr{ID: 17}
 
@@ -35,8 +36,8 @@ func TestDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rxn := 2
-	txn := 2
+	rxn := 8
+	txn := 8
 	d := NewDriver(dev, rxn, txn, nil)
 	d.Init()
 	ch := make(chan []byte, 1)

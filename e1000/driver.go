@@ -183,7 +183,7 @@ func (d *Driver) InitTx() error {
 
 func (d *Driver) InitRxBuf() (uintptr, error) {
 	size := d.NumRxDesc * SizeofRxDesc
-	desc, err := hugetlb.Alloc(size)
+	desc, phys, err := hugetlb.Alloc(size)
 	if err != nil {
 		return 0, err
 	}
@@ -196,23 +196,12 @@ func (d *Driver) InitRxBuf() (uintptr, error) {
 
 	for i := 0; i < d.NumRxDesc; i++ {
 		size := 2048
-		buf, err := hugetlb.Alloc(size)
+		buf, phys, err := hugetlb.Alloc(size)
 		if err != nil {
 			return 0, err
 		}
 		d.RxBuf[i] = buf
-		virt := uintptr(unsafe.Pointer(&buf[0]))
-		phys, err := hugetlb.VirtToPhys(virt)
-		if err != nil {
-			return 0, err
-		}
 		d.RxRing[i].Addr = phys
-	}
-
-	virt := uintptr(unsafe.Pointer(&desc[0]))
-	phys, err := hugetlb.VirtToPhys(virt)
-	if err != nil {
-		return 0, err
 	}
 
 	return phys, nil
@@ -220,7 +209,7 @@ func (d *Driver) InitRxBuf() (uintptr, error) {
 
 func (d *Driver) InitTxBuf() (uintptr, error) {
 	size := d.NumTxDesc * SizeofTxDesc
-	desc, err := hugetlb.Alloc(size)
+	desc, phys, err := hugetlb.Alloc(size)
 	if err != nil {
 		return 0, err
 	}
@@ -247,12 +236,6 @@ func (d *Driver) InitTxBuf() (uintptr, error) {
 			d.TxRing[i].Addr = phys
 		}
 	*/
-
-	virt := uintptr(unsafe.Pointer(&desc[0]))
-	phys, err := hugetlb.VirtToPhys(virt)
-	if err != nil {
-		return 0, err
-	}
 
 	return phys, nil
 }
@@ -332,8 +315,9 @@ func (d *Driver) Tx(pkt []byte) int {
 	// n := copy(d.TxBuf[tdt], pkt)
 	n := len(pkt)
 	d.TxBuf[tdt] = pkt
-	virt := uintptr(unsafe.Pointer(&pkt[0]))
-	phys, err := hugetlb.VirtToPhys(virt)
+	phys, err := hugetlb.PhysAddr(pkt)
+	//virt := uintptr(unsafe.Pointer(&pkt[0]))
+	//phys, err := hugetlb.VirtToPhys(virt)
 	if err != nil {
 		return 0
 	}

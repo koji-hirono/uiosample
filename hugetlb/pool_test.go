@@ -6,7 +6,7 @@ import (
 
 func TestPool(t *testing.T) {
 	buf := make([]byte, 128)
-	p := NewPool(buf, 32)
+	p := NewPool(buf, 0, 32)
 	if p.free != nil {
 		t.Fatal("free is not nil")
 	}
@@ -173,7 +173,7 @@ func TestPool(t *testing.T) {
 
 func TestPool_Get(t *testing.T) {
 	buf := make([]byte, 8)
-	p := NewPool(buf, 8)
+	p := NewPool(buf, 0, 8)
 	if p.free != nil {
 		t.Fatal("free is not nil")
 	}

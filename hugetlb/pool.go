@@ -11,13 +11,14 @@ type Entry struct {
 
 type Pool struct {
 	b    []byte
+	phys uintptr
 	free *Entry
 	unit int
 	used int
 }
 
-func NewPool(b []byte, unit int) *Pool {
-	return &Pool{b: b, unit: unit}
+func NewPool(b []byte, phys uintptr, unit int) *Pool {
+	return &Pool{b: b, phys: phys, unit: unit}
 }
 
 func (p *Pool) Get() ([]byte, bool) {
@@ -43,4 +44,10 @@ func (p *Pool) Put(b []byte) {
 	e := (*Entry)(unsafe.Pointer(&b[0]))
 	e.next = p.free
 	p.free = e
+}
+
+func (p *Pool) PhysAddr(b []byte) (uintptr, error) {
+	start := uintptr(unsafe.Pointer(&p.b[0]))
+	end := uintptr(unsafe.Pointer(&b[0]))
+	return p.phys + (end - start), nil
 }

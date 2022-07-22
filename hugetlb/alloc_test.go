@@ -7,7 +7,7 @@ import (
 )
 
 func TestAlloc(t *testing.T) {
-	err := SetPages(1)
+	err := SetPages(8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -15,7 +15,7 @@ func TestAlloc(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		func() {
-			buf, err := Alloc(4 * 1024)
+			buf, phys, err := Alloc(4 * 1024)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -25,10 +25,6 @@ func TestAlloc(t *testing.T) {
 			virt := uintptr(unsafe.Pointer(&buf[0]))
 			log.Printf("virt: %x\n", virt)
 
-			phys, err := VirtToPhys(virt)
-			if err != nil {
-				t.Fatal(err)
-			}
 			log.Printf("phys: %x\n", phys)
 		}()
 	}

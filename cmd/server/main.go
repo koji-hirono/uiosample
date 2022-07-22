@@ -155,7 +155,7 @@ func sendARPRequest(d *e1000.Driver) error {
 		},
 	}
 	n := pkt.Len()
-	b, err := hugetlb.Alloc(n)
+	b, _, err := hugetlb.Alloc(n)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 	}
 
 	n := pkt.Len()
-	b, err := hugetlb.Alloc(n)
+	b, _, err := hugetlb.Alloc(n)
 	if err != nil {
 		return err
 	}
@@ -298,7 +298,7 @@ func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	}
 
 	n := pkt.Len()
-	b, err := hugetlb.Alloc(n)
+	b, _, err := hugetlb.Alloc(n)
 	if err != nil {
 		return err
 	}
