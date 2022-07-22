@@ -116,22 +116,12 @@ func main() {
 		case pkt := <-dev1.ch:
 			log.Printf("Recv from dev1: %x\n", pkt)
 			bRx1.Start()
-			b, _, err := hugetlb.Alloc(len(pkt))
-			if err != nil {
-				continue
-			}
-			copy(b, pkt)
-			dev2.driver.Tx(b)
+			dev2.driver.Tx(pkt)
 			bRx1.End()
 		case pkt := <-dev2.ch:
 			log.Printf("Recv from dev2: %x\n", pkt)
 			bRx2.Start()
-			b, _, err := hugetlb.Alloc(len(pkt))
-			if err != nil {
-				continue
-			}
-			copy(b, pkt)
-			dev1.driver.Tx(b)
+			dev1.driver.Tx(pkt)
 			bRx2.End()
 		case <-sig:
 			bRx1.Print()

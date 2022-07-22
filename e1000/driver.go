@@ -28,6 +28,9 @@ type Driver struct {
 	RxRing    []RxDesc
 	TxRing    []TxDesc
 	Mac       []byte
+	rdh       int
+	rdt       int
+	rxnext    int
 }
 
 func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) *Driver {
@@ -146,7 +149,7 @@ func (d *Driver) InitRx() error {
 	d.RegWrite(RDLEN, uint32(d.NumRxDesc*SizeofTxDesc))
 
 	d.RegWrite(RDH, 0)
-	d.RegWrite(RDT, uint32(d.NumRxDesc-1))
+	d.RegWrite(RDT, 0)
 
 	val := RCTL_EN     // Enable
 	val |= RCTL_UPE    // Unicast Promiscuous Enable
@@ -194,16 +197,6 @@ func (d *Driver) InitRxBuf() (uintptr, error) {
 
 	d.RxBuf = make([][]byte, d.NumRxDesc)
 
-	for i := 0; i < d.NumRxDesc; i++ {
-		size := 2048
-		buf, phys, err := hugetlb.Alloc(size)
-		if err != nil {
-			return 0, err
-		}
-		d.RxBuf[i] = buf
-		d.RxRing[i].Addr = phys
-	}
-
 	return phys, nil
 }
 
@@ -219,23 +212,6 @@ func (d *Driver) InitTxBuf() (uintptr, error) {
 	hdr.Len = d.NumTxDesc
 
 	d.TxBuf = make([][]byte, d.NumTxDesc)
-
-	/*
-		for i := 0; i < d.NumTxDesc; i++ {
-			size := 2048
-			buf, err := hugetlb.Alloc(size)
-			if err != nil {
-				return 0, err
-			}
-			d.TxBuf[i] = buf
-			virt := uintptr(unsafe.Pointer(&buf[0]))
-			phys, err := hugetlb.VirtToPhys(virt)
-			if err != nil {
-				return 0, err
-			}
-			d.TxRing[i].Addr = phys
-		}
-	*/
 
 	return phys, nil
 }
@@ -312,12 +288,9 @@ func (d *Driver) Tx(pkt []byte) int {
 		return 0
 	}
 
-	// n := copy(d.TxBuf[tdt], pkt)
 	n := len(pkt)
 	d.TxBuf[tdt] = pkt
 	phys, err := hugetlb.PhysAddr(pkt)
-	//virt := uintptr(unsafe.Pointer(&pkt[0]))
-	//phys, err := hugetlb.VirtToPhys(virt)
 	if err != nil {
 		return 0
 	}
@@ -347,37 +320,81 @@ func (d *Driver) Tx(pkt []byte) int {
 	return n
 }
 
-func (d *Driver) Rx(i int) ([]byte, int) {
-	length := d.RxRing[i].Length
-	pkt := make([]byte, length)
-	copy(pkt, d.RxBuf[i][:length])
+func (d *Driver) Rx() []byte {
+	length := d.RxRing[d.rxnext].Length
+	pkt := d.RxBuf[d.rxnext][:length]
+	d.RxBuf[d.rxnext] = nil
+	d.rxnext = (d.rxnext + 1) % d.NumRxDesc
+	return pkt
+}
 
-	// clear desc
-	d.RxRing[i].Status &^= RxStatusDD
-
-	head := d.RegRead(RDH)
-	if head != uint32(i) {
-		d.RegWrite(RDT, uint32(i))
+func (d *Driver) CanRx() bool {
+	if d.rxnext == d.rdh {
+		return false
 	}
-	i = (i + 1) % d.NumRxDesc
-	return pkt, i
+	if d.RxRing[d.rxnext].Status&RxStatusDD == 0 {
+		return false
+	}
+	return true
+}
+
+func (d *Driver) CanAddRxBuf() bool {
+	rdt := (d.rdt + 1) % d.NumRxDesc
+	return rdt != d.rxnext
+}
+
+func (d *Driver) AddRxBuf(p []byte) error {
+	phys, err := hugetlb.PhysAddr(p)
+	if err != nil {
+		return err
+	}
+	desc := &d.RxRing[d.rdt]
+	desc.Addr = phys
+	desc.Status &^= RxStatusDD
+	d.RxBuf[d.rdt] = p
+	d.rdt = (d.rdt + 1) % d.NumRxDesc
+	return nil
+}
+
+func (d *Driver) FreeAllRxBuf() {
+	for d.rdt != d.rdh {
+		d.rdt = (d.rdt - 1) % d.NumRxDesc
+		desc := &d.RxRing[d.rdt]
+		desc.Addr = ^uintptr(0)
+		desc.Status &^= RxStatusDD
+		hugetlb.Free(d.RxBuf[d.rdt])
+		d.RxBuf[d.rdt] = nil
+	}
+}
+
+func (d *Driver) SyncRx() {
+	rdh := int(d.RegRead(RDH))
+	if rdh < d.NumRxDesc-1 {
+		d.rdh = rdh
+	} else {
+		d.rdh = d.NumRxDesc - 1
+	}
+	d.RegWrite(RDT, uint32(d.rdt))
 }
 
 func (d *Driver) Serve(ch chan []byte) {
-	i := 0
+	n := 32
 	for {
-		/*
-			d.logf("RDT: %v\n", d.RegRead(RDT))
-			d.logf("ICR: %v\n", d.RegRead(ICR))
-		*/
-		if d.RxRing[i].Status&RxStatusDD != 0 {
-			pkt, next := d.Rx(i)
-			i = next
+		d.SyncRx()
+		for i := 0; i < n; i++ {
+			if !d.CanRx() {
+				break
+			}
+			pkt := d.Rx()
 			ch <- pkt
 		}
-		/*
-			time.Sleep(time.Millisecond * 500)
-		*/
+		for d.CanAddRxBuf() {
+			p, _, err := hugetlb.Alloc(2048)
+			if err != nil {
+				break
+			}
+			d.AddRxBuf(p)
+		}
 	}
 }
 

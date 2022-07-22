@@ -40,7 +40,7 @@ func TestDriver(t *testing.T) {
 	txn := 8
 	d := NewDriver(dev, rxn, txn, nil)
 	d.Init()
-	ch := make(chan []byte, 1)
+	ch := make(chan []byte, 10)
 	defer close(ch)
 	go d.Serve(ch)
 	for pkt := range ch {
