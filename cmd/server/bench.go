@@ -45,6 +45,9 @@ func (b *Bench) End() {
 }
 
 func (b *Bench) Ave() uint64 {
+	if b.n == 0 {
+		return 0
+	}
 	return b.total / b.n
 }
 

@@ -70,9 +70,9 @@ func main() {
 	d := e1000.NewDriver(dev, rxn, txn, nil)
 	d.Init()
 
-	ch := make(chan []byte, 1)
-	defer close(ch)
-	go d.Serve(ch)
+	rx := make(chan []byte, 10)
+	defer close(rx)
+	go d.Serve(rx)
 	/*
 		go func() {
 			for {
@@ -84,32 +84,39 @@ func main() {
 			}
 		}()
 	*/
+	tx := make(chan []byte, 10)
+	defer close(tx)
+	go d.ServeTx(tx)
 
 	var stat e1000.Stat
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	for {
 		select {
-		case pkt := <-ch:
+		case pkt := <-rx:
 			bRx.Start()
 			//log.Printf("Recv: %x\n", pkt)
 			eth, err := DecodeEtherHdr(pkt)
 			if err != nil {
+				hugetlb.Free(pkt)
 				break
 			}
 			//log.Printf("EtherHdr: %#+v\n", eth)
 			switch eth.Type {
 			case EtherTypeIPv4:
-				err := procIPv4(d, &eth, pkt[eth.Len():])
+				err := procIPv4(d, tx, &eth, pkt[eth.Len():])
 				if err != nil {
+					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
 			case EtherTypeARP:
-				err := procARP(d, &eth, pkt[eth.Len():])
+				err := procARP(d, tx, &eth, pkt[eth.Len():])
 				if err != nil {
+					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
 			}
+			hugetlb.Free(pkt)
 			bRx.End()
 		case <-sig:
 			bRx.Print()
@@ -135,7 +142,7 @@ func PrintStat(stat *e1000.Stat) {
 	fmt.Printf("GOTC: %v\n", stat.GOTC)
 }
 
-func sendARPRequest(d *e1000.Driver) error {
+func sendARPRequest(d *e1000.Driver, tx chan []byte) error {
 	pkt := Packet{
 		EtherHdr{
 			Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
@@ -164,11 +171,11 @@ func sendARPRequest(d *e1000.Driver) error {
 		return err
 	}
 	log.Printf("Tx: %x\n", b)
-	d.Tx(b)
+	tx <- b
 	return nil
 }
 
-func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+func procIPv4(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) error {
 	bDecodeIPv4.Start()
 	ip, err := DecodeIPv4Hdr(payload)
 	if err != nil {
@@ -179,12 +186,12 @@ func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 
 	switch ip.Proto {
 	case IPProtoICMP:
-		return procICMP(d, eth, &ip, payload[ip.Len():])
+		return procICMP(d, tx, eth, &ip, payload[ip.Len():])
 	}
 	return nil
 }
 
-func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
+func procICMP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
 	bDecodeICMP.Start()
 	icmp, err := DecodeICMPHdr(payload)
 	if err != nil {
@@ -264,12 +271,12 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 	bEncodeICMP.End()
 	//log.Printf("Tx: %x\n", b)
 	bTxICMP.Start()
-	d.Tx(b)
+	tx <- b
 	bTxICMP.End()
 	return nil
 }
 
-func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+func procARP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) error {
 	bDecodeARP.Start()
 	arp, err := DecodeARPHdr(payload)
 	if err != nil {
@@ -309,7 +316,7 @@ func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	bEncodeARP.End()
 	//log.Printf("Tx: %x\n", b)
 	bTxARP.Start()
-	d.Tx(b)
+	tx <- b
 	bTxARP.End()
 	return nil
 }
