@@ -9,8 +9,8 @@ func TestICMPChecksum(t *testing.T) {
 	b := make([]byte, 256)
 	n := 0
 	hdr, m := DecodeICMPHdr(b)
-	hdr.Type = 0x8
-	hdr.Code = 0
+	hdr.Type.Set(0x8)
+	hdr.Code.Set(0)
 	hdr.Chksum.Set(0)
 	n += m
 

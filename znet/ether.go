@@ -5,8 +5,8 @@ import (
 )
 
 type EtherHdr struct {
-	Dst  [6]byte
-	Src  [6]byte
+	Dst  MacAddr
+	Src  MacAddr
 	Type Uint16
 }
 

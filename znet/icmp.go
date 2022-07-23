@@ -5,8 +5,8 @@ import (
 )
 
 type ICMPHdr struct {
-	Type   uint8
-	Code   uint8
+	Type   Uint8
+	Code   Uint8
 	Chksum Uint16
 }
 

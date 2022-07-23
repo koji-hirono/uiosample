@@ -7,13 +7,13 @@ import (
 type ARPHdr struct {
 	HType Uint16
 	PType Uint16
-	HLen  uint8
-	PLen  uint8
+	HLen  Uint8
+	PLen  Uint8
 	Op    Uint16
-	SMac  [6]byte
-	SIP   [4]byte
-	TMac  [6]byte
-	TIP   [4]byte
+	SMac  MacAddr
+	SIP   IPv4Addr
+	TMac  MacAddr
+	TIP   IPv4Addr
 }
 
 // ARPHdr.Op

@@ -1,5 +1,15 @@
 package znet
 
+type Uint8 byte
+
+func (u Uint8) Get() uint8 {
+	return uint8(u)
+}
+
+func (u *Uint8) Set(x uint8) {
+	*u = Uint8(x)
+}
+
 type Uint16 [2]byte
 
 func (u Uint16) Get() uint16 {
@@ -53,4 +63,24 @@ func (u *Uint64) Set(x uint64) {
 	u[5] = byte(x >> 16)
 	u[6] = byte(x >> 8)
 	u[7] = byte(x)
+}
+
+type MacAddr [6]byte
+
+func (a MacAddr) Get() []byte {
+	return a[:]
+}
+
+func (a *MacAddr) Set(x []byte) {
+	copy(a[:], x)
+}
+
+type IPv4Addr [4]byte
+
+func (a IPv4Addr) Get() []byte {
+	return a[:]
+}
+
+func (a *IPv4Addr) Set(x []byte) {
+	copy(a[:], x)
 }
