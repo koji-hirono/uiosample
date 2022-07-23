@@ -31,6 +31,8 @@ type Driver struct {
 	rdh       int
 	rdt       int
 	rxnext    int
+	tdh       int
+	tdt       int
 }
 
 func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) *Driver {
@@ -281,7 +283,76 @@ func (d *Driver) Init() error {
 	return err
 }
 
-func (d *Driver) Tx(pkt []byte) int {
+func (d *Driver) Tx(pkt []byte) error {
+	phys, err := hugetlb.PhysAddr(pkt)
+	if err != nil {
+		return err
+	}
+	d.TxBuf[d.tdt] = pkt
+	desc := &d.TxRing[d.tdt]
+	desc.Addr = phys
+	desc.Length = uint16(len(pkt))
+	cmd := TxCommandEOP
+	cmd |= TxCommandIFCS
+	cmd |= TxCommandRS
+	// cmd |= TxCommandIDE
+	desc.Command = cmd
+	desc.CSO = 0
+	desc.Status = 0
+	desc.CSS = 0
+	desc.Special = 0
+	d.tdt = (d.tdt + 1) % d.NumTxDesc
+	d.RegWrite(TDT, uint32(d.tdt))
+	return nil
+}
+
+func (d *Driver) CanTx() bool {
+	tdt := (d.tdt + 1) % d.NumTxDesc
+	return tdt != d.tdh
+}
+
+func (d *Driver) SyncTx() {
+	i := d.tdh
+	d.tdh = int(d.RegRead(TDH))
+	for i != d.tdh {
+		hugetlb.Free(d.TxBuf[i])
+		d.TxBuf[i] = nil
+		i = (i + 1) % d.NumTxDesc
+	}
+}
+
+func (d *Driver) ServeTx(ch chan []byte) {
+	for {
+		for len(ch) > 0 && d.CanTx() {
+			select {
+			case pkt, ok := <-ch:
+				if !ok {
+					return
+				}
+				d.Tx(pkt)
+			default:
+				break
+			}
+		}
+		d.SyncTx()
+	}
+}
+
+func (d *Driver) DiscardUnsetPackets() {
+	i := d.tdt
+	d.tdt = int(d.RegRead(TDT))
+	d.tdh = int(d.RegRead(TDH))
+	d.RegWrite(TDT, uint32(d.tdh))
+	for i != d.tdh {
+		i = (i - 1) % d.NumTxDesc
+		hugetlb.Free(d.TxBuf[i])
+		d.TxRing[i].Addr = ^uintptr(0)
+		d.TxRing[i].Length = 0
+	}
+	d.tdt = d.tdh
+}
+
+func (d *Driver) OldTx(pkt []byte) int {
 	tdt := d.RegRead(TDT)
 	tdh := d.RegRead(TDH)
 	if tdh == (tdt+1)%uint32(d.NumTxDesc) {
@@ -343,17 +414,12 @@ func (d *Driver) CanAddRxBuf() bool {
 	return rdt != d.rxnext
 }
 
-func (d *Driver) AddRxBuf(p []byte) error {
-	phys, err := hugetlb.PhysAddr(p)
-	if err != nil {
-		return err
-	}
+func (d *Driver) AddRxBuf(p []byte, phys uintptr) {
 	desc := &d.RxRing[d.rdt]
 	desc.Addr = phys
 	desc.Status &^= RxStatusDD
 	d.RxBuf[d.rdt] = p
 	d.rdt = (d.rdt + 1) % d.NumRxDesc
-	return nil
 }
 
 func (d *Driver) FreeAllRxBuf() {
@@ -389,11 +455,12 @@ func (d *Driver) Serve(ch chan []byte) {
 			ch <- pkt
 		}
 		for d.CanAddRxBuf() {
-			p, _, err := hugetlb.Alloc(2048)
+			p, phys, err := hugetlb.Alloc(2048)
 			if err != nil {
+				d.logf("alloc failed %v\n", err)
 				break
 			}
-			d.AddRxBuf(p)
+			d.AddRxBuf(p, phys)
 		}
 	}
 }
