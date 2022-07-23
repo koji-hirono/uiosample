@@ -12,9 +12,9 @@ import (
 
 	"uiosample/bench"
 	"uiosample/e1000"
-	"uiosample/ethernet"
 	"uiosample/hugetlb"
 	"uiosample/pci"
+	"uiosample/znet"
 )
 
 var (
@@ -108,21 +108,17 @@ func Serve(d *e1000.Driver, sig chan os.Signal) {
 		for i := 0; i < n; i++ {
 			pkt := pkts[i]
 			//log.Printf("Recv: %x\n", pkt)
-			eth, err := ethernet.DecodeEtherHdr(pkt)
-			if err != nil {
-				hugetlb.Free(pkt)
-				continue
-			}
+			eth, _ := znet.DecodeEtherHdr(pkt)
 			//log.Printf("EtherHdr: %#+v\n", eth)
-			switch eth.Type {
-			case ethernet.EtherTypeIPv4:
-				err := procIPv4(d, &eth, pkt[eth.Len():])
+			switch eth.Type.Get() {
+			case znet.EtherTypeIPv4:
+				err := procIPv4(d, eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
-			case ethernet.EtherTypeARP:
-				err := procARP(d, &eth, pkt[eth.Len():])
+			case znet.EtherTypeARP:
+				err := procARP(d, eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
 					log.Fatal(err)
@@ -142,182 +138,150 @@ func PrintStat(stat *e1000.Stat) {
 }
 
 func sendARPRequest(d *e1000.Driver) error {
-	pkt := ethernet.Packet{
-		ethernet.EtherHdr{
-			Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-			Src:  d.Mac,
-			Type: ethernet.EtherTypeARP,
-		},
-		ethernet.ARPHdr{
-			HType: 1,
-			PType: 0x800,
-			HLen:  6,
-			PLen:  4,
-			Op:    ethernet.ARPRequest,
-			SMac:  d.Mac,
-			SIP:   []byte{30, 30, 0, 2},
-			TMac:  []byte{0, 0, 0, 0, 0, 0},
-			TIP:   []byte{30, 30, 0, 1},
-		},
-	}
-	n := pkt.Len()
-	b, _, err := hugetlb.Alloc(n)
+	b, _, err := hugetlb.Alloc(2048)
 	if err != nil {
 		return err
 	}
-	err = pkt.Encode(b)
-	if err != nil {
-		return err
-	}
-	log.Printf("Tx: %x\n", b)
-	for d.TxBurst([][]byte{b}) == 0 {
+	n := 0
+	hdr, m := znet.DecodeEtherHdr(b)
+	copy(hdr.Dst[:], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	copy(hdr.Src[:], d.Mac)
+	hdr.Type.Set(znet.EtherTypeARP)
+	n += m
+
+	arp, m := znet.DecodeARPHdr(b[m:])
+	arp.HType.Set(1)
+	arp.PType.Set(0x800)
+	arp.HLen = 6
+	arp.PLen = 4
+	arp.Op.Set(znet.ARPRequest)
+	copy(arp.SMac[:], d.Mac)
+	copy(arp.SIP[:], []byte{30, 30, 0, 2})
+	copy(arp.TMac[:], []byte{0, 0, 0, 0, 0, 0})
+	copy(arp.TIP[:], []byte{30, 30, 0, 1})
+	n += m
+
+	log.Printf("Tx: %x\n", b[:n])
+	for d.TxBurst([][]byte{b[:n]}) == 0 {
 	}
 	return nil
 }
 
-func procIPv4(d *e1000.Driver, eth *ethernet.EtherHdr, payload []byte) error {
+func procIPv4(d *e1000.Driver, eth *znet.EtherHdr, payload []byte) error {
 	bDecodeIPv4.Start()
-	ip, err := ethernet.DecodeIPv4Hdr(payload)
-	if err != nil {
-		return err
-	}
+	ip, _ := znet.DecodeIPv4Hdr(payload)
 	//log.Printf("IPv4Hdr: %#+v\n", ip)
 	bDecodeIPv4.End()
 
 	switch ip.Proto {
-	case ethernet.IPProtoICMP:
-		return procICMP(d, eth, &ip, payload[ip.Len():])
+	case znet.IPProtoICMP:
+		return procICMP(d, eth, ip, payload[ip.Len():])
 	}
 	return nil
 }
 
-func procICMP(d *e1000.Driver, eth *ethernet.EtherHdr, ip *ethernet.IPv4Hdr, payload []byte) error {
+func procICMP(d *e1000.Driver, eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte) error {
 	bDecodeICMP.Start()
-	icmp, err := ethernet.DecodeICMPHdr(payload)
-	if err != nil {
-		return err
-	}
+	icmp, _ := znet.DecodeICMPHdr(payload)
 	//log.Printf("ICMPHdr: %#+v\n", icmp)
 	switch icmp.Type {
-	case ethernet.ICMPTypeEchoRequest:
+	case znet.ICMPTypeEchoRequest:
 	default:
 		return nil
 	}
-	echo, err := ethernet.DecodeICMPEchoHdr(payload[icmp.Len():])
-	if err != nil {
-		return err
-	}
+	echo, _ := znet.DecodeICMPEchoHdr(payload[icmp.Len():])
 	//log.Printf("ICMPEchoHdr: %#+v\n", echo)
 	bDecodeICMP.End()
-	bEncodeICMP.Start()
-	txicmp := ethernet.Packet{
-		ethernet.ICMPHdr{
-			Type:   ethernet.ICMPTypeEchoReply,
-			Code:   0,
-			Chksum: 0,
-		},
-		ethernet.ICMPEchoHdr{
-			ID:  echo.ID,
-			Seq: echo.Seq,
-		},
-		ethernet.Data(payload[icmp.Len()+echo.Len():]),
-	}
-	txicmp2 := ethernet.Packet{
-		ethernet.ICMPHdr{
-			Type:   ethernet.ICMPTypeEchoReply,
-			Code:   0,
-			Chksum: uint16(^txicmp.Sum()),
-		},
-		ethernet.ICMPEchoHdr{
-			ID:  echo.ID,
-			Seq: echo.Seq,
-		},
-		ethernet.Data(payload[icmp.Len()+echo.Len():]),
-	}
-	ipv4 := ethernet.IPv4Hdr{
-		Version: ip.Version,
-		Hdrlen:  ip.Hdrlen,
-		ToS:     ip.ToS,
-		Length:  ip.Length,
-		ID:      0,
-		Flags:   0,
-		Offset:  0,
-		TTL:     64,
-		Proto:   ethernet.IPProtoICMP,
-		Chksum:  0,
-		Src:     ip.Dst,
-		Dst:     ip.Src,
-	}
-	ipv4.Chksum = uint16(^ipv4.Sum())
-	pkt := ethernet.Packet{
-		ethernet.EtherHdr{
-			Dst:  eth.Src,
-			Src:  d.Mac,
-			Type: eth.Type,
-		},
-		ipv4,
-		txicmp2,
-	}
 
-	n := pkt.Len()
-	b, _, err := hugetlb.Alloc(n)
+	bEncodeICMP.Start()
+	b, _, err := hugetlb.Alloc(2048)
 	if err != nil {
 		return err
 	}
-	err = pkt.Encode(b)
-	if err != nil {
-		return err
-	}
+	n := 0
+	hdr, m := znet.DecodeEtherHdr(b)
+	copy(hdr.Dst[:], eth.Src[:])
+	copy(hdr.Src[:], d.Mac)
+	copy(hdr.Type[:], eth.Type[:])
+	n += m
+
+	markipv4 := n
+	ipv4, m := znet.DecodeIPv4Hdr(b[n:])
+	ipv4.VerHL = ip.VerHL
+	ipv4.ToS = ip.ToS
+	copy(ipv4.Length[:], ip.Length[:])
+	ipv4.ID.Set(0)
+	ipv4.FlgOff.Set(0)
+	ipv4.TTL = 64
+	ipv4.Proto = znet.IPProtoICMP
+	ipv4.Chksum.Set(0)
+	copy(ipv4.Src[:], ip.Dst[:])
+	copy(ipv4.Dst[:], ip.Src[:])
+	n += m
+	markipv4end := n
+
+	markicmp := n
+	txicmp, m := znet.DecodeICMPHdr(b[n:])
+	txicmp.Type = znet.ICMPTypeEchoReply
+	txicmp.Code = 0
+	txicmp.Chksum.Set(0)
+	n += m
+
+	txecho, m := znet.DecodeICMPEchoHdr(b[n:])
+	copy(txecho.ID[:], echo.ID[:])
+	copy(txecho.Seq[:], echo.Seq[:])
+	n += m
+
+	m = copy(b[n:], payload[icmp.Len()+echo.Len():])
+	n += m
+
+	txicmp.Chksum.Set(znet.CalcChecksum(b[markicmp:n]))
+
+	ipv4.Chksum.Set(znet.CalcChecksum(b[markipv4:markipv4end]))
+
 	bEncodeICMP.End()
-	//log.Printf("Tx: %x\n", b)
+	//log.Printf("Tx: %x\n", b[:n])
 	bTxICMP.Start()
-	for d.TxBurst([][]byte{b}) == 0 {
+	for d.TxBurst([][]byte{b[:n]}) == 0 {
 	}
 	bTxICMP.End()
 	return nil
 }
 
-func procARP(d *e1000.Driver, eth *ethernet.EtherHdr, payload []byte) error {
+func procARP(d *e1000.Driver, eth *znet.EtherHdr, payload []byte) error {
 	bDecodeARP.Start()
-	arp, err := ethernet.DecodeARPHdr(payload)
-	if err != nil {
-		return err
-	}
+	arp, _ := znet.DecodeARPHdr(payload)
 	//log.Printf("ARPHdr: %#+v\n", arp)
 	bDecodeARP.End()
-	bEncodeARP.Start()
-	pkt := ethernet.Packet{
-		ethernet.EtherHdr{
-			Dst:  eth.Src,
-			Src:  d.Mac,
-			Type: eth.Type,
-		},
-		ethernet.ARPHdr{
-			HType: arp.HType,
-			PType: arp.PType,
-			HLen:  arp.HLen,
-			PLen:  arp.PLen,
-			Op:    ethernet.ARPReply,
-			SMac:  d.Mac,
-			SIP:   arp.TIP,
-			TMac:  arp.SMac,
-			TIP:   arp.SIP,
-		},
-	}
 
-	n := pkt.Len()
-	b, _, err := hugetlb.Alloc(n)
+	bEncodeARP.Start()
+	b, _, err := hugetlb.Alloc(2048)
 	if err != nil {
 		return err
 	}
-	err = pkt.Encode(b)
-	if err != nil {
-		return err
-	}
+	n := 0
+	hdr, m := znet.DecodeEtherHdr(b)
+	copy(hdr.Dst[:], eth.Src[:])
+	copy(hdr.Src[:], d.Mac[:])
+	copy(hdr.Type[:], eth.Type[:])
+	n += m
+
+	txarp, m := znet.DecodeARPHdr(b[n:])
+	copy(txarp.HType[:], arp.HType[:])
+	copy(txarp.PType[:], arp.PType[:])
+	txarp.HLen = arp.HLen
+	txarp.PLen = arp.PLen
+	txarp.Op.Set(znet.ARPReply)
+	copy(txarp.SMac[:], d.Mac[:])
+	copy(txarp.SIP[:], arp.TIP[:])
+	copy(txarp.TMac[:], arp.SMac[:])
+	copy(txarp.TIP[:], arp.SIP[:])
+	n += m
+
 	bEncodeARP.End()
-	//log.Printf("Tx: %x\n", b)
+	//log.Printf("Tx: %x\n", b[:n])
 	bTxARP.Start()
-	for d.TxBurst([][]byte{b}) == 0 {
+	for d.TxBurst([][]byte{b[:n]}) == 0 {
 	}
 	bTxARP.End()
 	return nil
