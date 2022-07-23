@@ -3,6 +3,7 @@ package hugetlb
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"syscall"
 	"unsafe"
@@ -88,6 +89,20 @@ func Init() {
 	}
 }
 
+func Stat() {
+	for _, unit := range PoolSizeList {
+		p, ok := PoolTable[unit]
+		if !ok {
+			continue
+		}
+
+		log.Printf("== Pool[%v]\n", unit)
+		log.Printf("len : %v\n", len(p.b))
+		log.Printf("used: %v\n", p.used)
+		log.Printf("free: %v\n", p.free)
+	}
+}
+
 func Alloc(size int) ([]byte, uintptr, error) {
 	for _, unit := range PoolSizeList {
 		if size <= unit {
@@ -107,6 +122,7 @@ func Alloc(size int) ([]byte, uintptr, error) {
 			return b, phys, nil
 		}
 	}
+	log.Printf("Alloc: unknown pool size: %v\n", size)
 	n := (size / (2 * 1024 * 1024)) + 1
 	b, err := PageAlloc(n)
 	if err != nil {
@@ -123,17 +139,25 @@ func Alloc(size int) ([]byte, uintptr, error) {
 
 func Free(b []byte) {
 	size := cap(b)
-	for _, unit := range PoolSizeList {
-		if size <= unit {
-			p, ok := PoolTable[unit]
-			if !ok {
+	/*
+		for _, unit := range PoolSizeList {
+			if size <= unit {
+				p, ok := PoolTable[unit]
+				if !ok {
+					return
+				}
+				p.Put(b)
 				return
 			}
-			p.Put(b)
-			return
 		}
+	*/
+	p, ok := PoolTable[size]
+	if !ok {
+		log.Printf("Free: unknown pool size: %v\n", size)
+		PageFree(b)
+		return
 	}
-	PageFree(b)
+	p.Put(b)
 }
 
 func PhysAddr(b []byte) (uintptr, error) {
