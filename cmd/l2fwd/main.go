@@ -10,14 +10,15 @@ import (
 	"syscall"
 	_ "time"
 
+	"uiosample/bench"
 	"uiosample/e1000"
 	"uiosample/hugetlb"
 	"uiosample/pci"
 )
 
 var (
-	bRx1 = NewBench("Rx1 Packet")
-	bRx2 = NewBench("Rx2 Packet")
+	bRx1 = bench.New("Rx1 Packet")
+	bRx2 = bench.New("Rx2 Packet")
 )
 
 type Device struct {

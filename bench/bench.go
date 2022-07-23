@@ -1,7 +1,9 @@
-package main
+package bench
 
 import (
 	"fmt"
+
+	"uiosample/clock"
 )
 
 type Bench struct {
@@ -13,7 +15,7 @@ type Bench struct {
 	start uint64
 }
 
-func NewBench(ident string) *Bench {
+func New(ident string) *Bench {
 	b := new(Bench)
 	b.ident = ident
 	b.Reset()
@@ -28,11 +30,11 @@ func (b *Bench) Reset() {
 }
 
 func (b *Bench) Start() {
-	b.start = Rdtsc()
+	b.start = clock.Rdtsc()
 }
 
 func (b *Bench) End() {
-	end := Rdtsc()
+	end := clock.Rdtsc()
 	d := end - b.start
 	b.total += d
 	b.n++

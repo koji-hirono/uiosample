@@ -10,20 +10,21 @@ import (
 	"syscall"
 	_ "time"
 
+	"uiosample/bench"
 	"uiosample/e1000"
 	"uiosample/hugetlb"
 	"uiosample/pci"
 )
 
 var (
-	bRx         = NewBench("Rx Packet")
-	bDecodeIPv4 = NewBench("Decode IPv4")
-	bDecodeICMP = NewBench("Decode ICMP")
-	bDecodeARP  = NewBench("Decode ARP")
-	bEncodeICMP = NewBench("Encode ICMP")
-	bEncodeARP  = NewBench("Encode ICMP")
-	bTxICMP     = NewBench("Tx ICMP")
-	bTxARP      = NewBench("Tx ARP")
+	bRx         = bench.New("Rx Packet")
+	bDecodeIPv4 = bench.New("Decode IPv4")
+	bDecodeICMP = bench.New("Decode ICMP")
+	bDecodeARP  = bench.New("Decode ARP")
+	bEncodeICMP = bench.New("Encode ICMP")
+	bEncodeARP  = bench.New("Encode ICMP")
+	bTxICMP     = bench.New("Tx ICMP")
+	bTxARP      = bench.New("Tx ARP")
 )
 
 func main() {
