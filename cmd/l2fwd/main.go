@@ -24,10 +24,9 @@ type Device struct {
 	c      *pci.Config
 	dev    *pci.Device
 	driver *e1000.Driver
-	ch     chan []byte
 }
 
-func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
+func OpenDevice(unit int, addr *pci.Addr, rx, tx chan []byte) (*Device, error) {
 	c, err := pci.NewConfig(unit)
 	if err != nil {
 		return nil, err
@@ -59,19 +58,17 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 	driver := e1000.NewDriver(dev, rxn, txn, nil)
 	driver.Init()
 
-	ch := make(chan []byte, 1)
-	go driver.Serve(ch)
+	go driver.Serve(rx)
+	go driver.ServeTx(tx)
 
 	return &Device{
 		c:      c,
 		dev:    dev,
 		driver: driver,
-		ch:     ch,
 	}, nil
 }
 
 func (d *Device) Close() {
-	close(d.ch)
 	d.c.Close()
 }
 
@@ -83,6 +80,11 @@ func main() {
 	}
 	hugetlb.SetPages(128)
 	hugetlb.Init()
+
+	ch12 := make(chan []byte, 10)
+	defer close(ch12)
+	ch21 := make(chan []byte, 10)
+	defer close(ch21)
 
 	pciid1, err := strconv.ParseUint(os.Args[1], 0, 8)
 	if err != nil {
@@ -96,13 +98,13 @@ func main() {
 	}
 	addr2 := &pci.Addr{ID: uint8(pciid2)}
 
-	dev1, err := OpenDevice(0, addr1)
+	dev1, err := OpenDevice(0, addr1, ch21, ch12)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev1.Close()
 
-	dev2, err := OpenDevice(1, addr2)
+	dev2, err := OpenDevice(1, addr2, ch12, ch21)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -113,16 +115,6 @@ func main() {
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	for {
 		select {
-		case pkt := <-dev1.ch:
-			log.Printf("Recv from dev1: %x\n", pkt)
-			bRx1.Start()
-			dev2.driver.Tx(pkt)
-			bRx1.End()
-		case pkt := <-dev2.ch:
-			log.Printf("Recv from dev2: %x\n", pkt)
-			bRx2.Start()
-			dev1.driver.Tx(pkt)
-			bRx2.End()
 		case <-sig:
 			bRx1.Print()
 			bRx2.Print()
@@ -130,6 +122,7 @@ func main() {
 			PrintStat(&stat)
 			dev2.driver.UpdateStat(&stat)
 			PrintStat(&stat)
+			hugetlb.Stat()
 			os.Exit(0)
 		}
 	}
