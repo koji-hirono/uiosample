@@ -1,4 +1,4 @@
-package main
+package ethernet
 
 import (
 	"testing"

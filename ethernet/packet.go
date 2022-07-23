@@ -1,4 +1,4 @@
-package main
+package ethernet
 
 type Encoder interface {
 	Len() int

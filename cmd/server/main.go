@@ -12,6 +12,7 @@ import (
 
 	"uiosample/bench"
 	"uiosample/e1000"
+	"uiosample/ethernet"
 	"uiosample/hugetlb"
 	"uiosample/pci"
 )
@@ -107,20 +108,20 @@ func Serve(d *e1000.Driver, sig chan os.Signal) {
 		for i := 0; i < n; i++ {
 			pkt := pkts[i]
 			//log.Printf("Recv: %x\n", pkt)
-			eth, err := DecodeEtherHdr(pkt)
+			eth, err := ethernet.DecodeEtherHdr(pkt)
 			if err != nil {
 				hugetlb.Free(pkt)
 				continue
 			}
 			//log.Printf("EtherHdr: %#+v\n", eth)
 			switch eth.Type {
-			case EtherTypeIPv4:
+			case ethernet.EtherTypeIPv4:
 				err := procIPv4(d, &eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
-			case EtherTypeARP:
+			case ethernet.EtherTypeARP:
 				err := procARP(d, &eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
@@ -141,18 +142,18 @@ func PrintStat(stat *e1000.Stat) {
 }
 
 func sendARPRequest(d *e1000.Driver) error {
-	pkt := Packet{
-		EtherHdr{
+	pkt := ethernet.Packet{
+		ethernet.EtherHdr{
 			Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			Src:  d.Mac,
-			Type: EtherTypeARP,
+			Type: ethernet.EtherTypeARP,
 		},
-		ARPHdr{
+		ethernet.ARPHdr{
 			HType: 1,
 			PType: 0x800,
 			HLen:  6,
 			PLen:  4,
-			Op:    ARPRequest,
+			Op:    ethernet.ARPRequest,
 			SMac:  d.Mac,
 			SIP:   []byte{30, 30, 0, 2},
 			TMac:  []byte{0, 0, 0, 0, 0, 0},
@@ -174,9 +175,9 @@ func sendARPRequest(d *e1000.Driver) error {
 	return nil
 }
 
-func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+func procIPv4(d *e1000.Driver, eth *ethernet.EtherHdr, payload []byte) error {
 	bDecodeIPv4.Start()
-	ip, err := DecodeIPv4Hdr(payload)
+	ip, err := ethernet.DecodeIPv4Hdr(payload)
 	if err != nil {
 		return err
 	}
@@ -184,56 +185,56 @@ func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	bDecodeIPv4.End()
 
 	switch ip.Proto {
-	case IPProtoICMP:
+	case ethernet.IPProtoICMP:
 		return procICMP(d, eth, &ip, payload[ip.Len():])
 	}
 	return nil
 }
 
-func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
+func procICMP(d *e1000.Driver, eth *ethernet.EtherHdr, ip *ethernet.IPv4Hdr, payload []byte) error {
 	bDecodeICMP.Start()
-	icmp, err := DecodeICMPHdr(payload)
+	icmp, err := ethernet.DecodeICMPHdr(payload)
 	if err != nil {
 		return err
 	}
 	//log.Printf("ICMPHdr: %#+v\n", icmp)
 	switch icmp.Type {
-	case ICMPTypeEchoRequest:
+	case ethernet.ICMPTypeEchoRequest:
 	default:
 		return nil
 	}
-	echo, err := DecodeICMPEchoHdr(payload[icmp.Len():])
+	echo, err := ethernet.DecodeICMPEchoHdr(payload[icmp.Len():])
 	if err != nil {
 		return err
 	}
 	//log.Printf("ICMPEchoHdr: %#+v\n", echo)
 	bDecodeICMP.End()
 	bEncodeICMP.Start()
-	txicmp := Packet{
-		ICMPHdr{
-			Type:   ICMPTypeEchoReply,
+	txicmp := ethernet.Packet{
+		ethernet.ICMPHdr{
+			Type:   ethernet.ICMPTypeEchoReply,
 			Code:   0,
 			Chksum: 0,
 		},
-		ICMPEchoHdr{
+		ethernet.ICMPEchoHdr{
 			ID:  echo.ID,
 			Seq: echo.Seq,
 		},
-		Data(payload[icmp.Len()+echo.Len():]),
+		ethernet.Data(payload[icmp.Len()+echo.Len():]),
 	}
-	txicmp2 := Packet{
-		ICMPHdr{
-			Type:   ICMPTypeEchoReply,
+	txicmp2 := ethernet.Packet{
+		ethernet.ICMPHdr{
+			Type:   ethernet.ICMPTypeEchoReply,
 			Code:   0,
 			Chksum: uint16(^txicmp.Sum()),
 		},
-		ICMPEchoHdr{
+		ethernet.ICMPEchoHdr{
 			ID:  echo.ID,
 			Seq: echo.Seq,
 		},
-		Data(payload[icmp.Len()+echo.Len():]),
+		ethernet.Data(payload[icmp.Len()+echo.Len():]),
 	}
-	ipv4 := IPv4Hdr{
+	ipv4 := ethernet.IPv4Hdr{
 		Version: ip.Version,
 		Hdrlen:  ip.Hdrlen,
 		ToS:     ip.ToS,
@@ -242,14 +243,14 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 		Flags:   0,
 		Offset:  0,
 		TTL:     64,
-		Proto:   IPProtoICMP,
+		Proto:   ethernet.IPProtoICMP,
 		Chksum:  0,
 		Src:     ip.Dst,
 		Dst:     ip.Src,
 	}
 	ipv4.Chksum = uint16(^ipv4.Sum())
-	pkt := Packet{
-		EtherHdr{
+	pkt := ethernet.Packet{
+		ethernet.EtherHdr{
 			Dst:  eth.Src,
 			Src:  d.Mac,
 			Type: eth.Type,
@@ -276,27 +277,27 @@ func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error
 	return nil
 }
 
-func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
+func procARP(d *e1000.Driver, eth *ethernet.EtherHdr, payload []byte) error {
 	bDecodeARP.Start()
-	arp, err := DecodeARPHdr(payload)
+	arp, err := ethernet.DecodeARPHdr(payload)
 	if err != nil {
 		return err
 	}
 	//log.Printf("ARPHdr: %#+v\n", arp)
 	bDecodeARP.End()
 	bEncodeARP.Start()
-	pkt := Packet{
-		EtherHdr{
+	pkt := ethernet.Packet{
+		ethernet.EtherHdr{
 			Dst:  eth.Src,
 			Src:  d.Mac,
 			Type: eth.Type,
 		},
-		ARPHdr{
+		ethernet.ARPHdr{
 			HType: arp.HType,
 			PType: arp.PType,
 			HLen:  arp.HLen,
 			PLen:  arp.PLen,
-			Op:    ARPReply,
+			Op:    ethernet.ARPReply,
 			SMac:  d.Mac,
 			SIP:   arp.TIP,
 			TMac:  arp.SMac,
