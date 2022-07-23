@@ -22,7 +22,7 @@ var (
 	bDecodeICMP = bench.New("Decode ICMP")
 	bDecodeARP  = bench.New("Decode ARP")
 	bEncodeICMP = bench.New("Encode ICMP")
-	bEncodeARP  = bench.New("Encode ICMP")
+	bEncodeARP  = bench.New("Encode ARP")
 	bTxICMP     = bench.New("Tx ICMP")
 	bTxARP      = bench.New("Tx ARP")
 )
@@ -66,71 +66,68 @@ func main() {
 
 	// rxn >= 8
 	// txn >= 8
-	rxn := 8
-	txn := 8
+	rxn := 32
+	txn := 32
 	d := e1000.NewDriver(dev, rxn, txn, nil)
 	d.Init()
 
-	rx := make(chan []byte, 10)
-	defer close(rx)
-	go d.Serve(rx)
-	/*
-		go func() {
-			for {
-				err := sendARPRequest(d)
-				if err != nil {
-					log.Fatal(err)
-				}
-				time.Sleep(time.Second * 2)
-			}
-		}()
-	*/
-	tx := make(chan []byte, 10)
-	defer close(tx)
-	go d.ServeTx(tx)
-
-	var stat e1000.Stat
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+
+	Serve(d, sig)
+
+	bRx.Print()
+	bDecodeIPv4.Print()
+	bDecodeICMP.Print()
+	bDecodeARP.Print()
+	bEncodeICMP.Print()
+	bEncodeARP.Print()
+	bTxICMP.Print()
+	bTxARP.Print()
+
+	var stat e1000.Stat
+	d.UpdateStat(&stat)
+
+	PrintStat(&stat)
+
+	hugetlb.Stat()
+}
+
+func Serve(d *e1000.Driver, sig chan os.Signal) {
+	pkts := make([][]byte, 32, 32)
 	for {
 		select {
-		case pkt := <-rx:
-			bRx.Start()
+		case <-sig:
+			return
+		default:
+		}
+		bRx.Start()
+		n := d.RxBurst(pkts)
+		bRx.End()
+		for i := 0; i < n; i++ {
+			pkt := pkts[i]
 			//log.Printf("Recv: %x\n", pkt)
 			eth, err := DecodeEtherHdr(pkt)
 			if err != nil {
 				hugetlb.Free(pkt)
-				break
+				continue
 			}
 			//log.Printf("EtherHdr: %#+v\n", eth)
 			switch eth.Type {
 			case EtherTypeIPv4:
-				err := procIPv4(d, tx, &eth, pkt[eth.Len():])
+				err := procIPv4(d, &eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
 			case EtherTypeARP:
-				err := procARP(d, tx, &eth, pkt[eth.Len():])
+				err := procARP(d, &eth, pkt[eth.Len():])
 				if err != nil {
 					hugetlb.Free(pkt)
 					log.Fatal(err)
 				}
 			}
 			hugetlb.Free(pkt)
-			bRx.End()
-		case <-sig:
-			bRx.Print()
-			bDecodeIPv4.Print()
-			bDecodeICMP.Print()
-			bDecodeARP.Print()
-			bEncodeICMP.Print()
-			bEncodeARP.Print()
-			bTxICMP.Print()
-			bTxARP.Print()
-			d.UpdateStat(&stat)
-			PrintStat(&stat)
-			os.Exit(0)
 		}
 	}
 }
@@ -143,7 +140,7 @@ func PrintStat(stat *e1000.Stat) {
 	fmt.Printf("GOTC: %v\n", stat.GOTC)
 }
 
-func sendARPRequest(d *e1000.Driver, tx chan []byte) error {
+func sendARPRequest(d *e1000.Driver) error {
 	pkt := Packet{
 		EtherHdr{
 			Dst:  []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
@@ -172,11 +169,12 @@ func sendARPRequest(d *e1000.Driver, tx chan []byte) error {
 		return err
 	}
 	log.Printf("Tx: %x\n", b)
-	tx <- b
+	for d.TxBurst([][]byte{b}) == 0 {
+	}
 	return nil
 }
 
-func procIPv4(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) error {
+func procIPv4(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	bDecodeIPv4.Start()
 	ip, err := DecodeIPv4Hdr(payload)
 	if err != nil {
@@ -187,12 +185,12 @@ func procIPv4(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) er
 
 	switch ip.Proto {
 	case IPProtoICMP:
-		return procICMP(d, tx, eth, &ip, payload[ip.Len():])
+		return procICMP(d, eth, &ip, payload[ip.Len():])
 	}
 	return nil
 }
 
-func procICMP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
+func procICMP(d *e1000.Driver, eth *EtherHdr, ip *IPv4Hdr, payload []byte) error {
 	bDecodeICMP.Start()
 	icmp, err := DecodeICMPHdr(payload)
 	if err != nil {
@@ -272,12 +270,13 @@ func procICMP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, ip *IPv4Hdr, paylo
 	bEncodeICMP.End()
 	//log.Printf("Tx: %x\n", b)
 	bTxICMP.Start()
-	tx <- b
+	for d.TxBurst([][]byte{b}) == 0 {
+	}
 	bTxICMP.End()
 	return nil
 }
 
-func procARP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) error {
+func procARP(d *e1000.Driver, eth *EtherHdr, payload []byte) error {
 	bDecodeARP.Start()
 	arp, err := DecodeARPHdr(payload)
 	if err != nil {
@@ -317,7 +316,8 @@ func procARP(d *e1000.Driver, tx chan []byte, eth *EtherHdr, payload []byte) err
 	bEncodeARP.End()
 	//log.Printf("Tx: %x\n", b)
 	bTxARP.Start()
-	tx <- b
+	for d.TxBurst([][]byte{b}) == 0 {
+	}
 	bTxARP.End()
 	return nil
 }

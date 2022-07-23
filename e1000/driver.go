@@ -283,6 +283,19 @@ func (d *Driver) Init() error {
 	return err
 }
 
+func (d *Driver) TxBurst(pkts [][]byte) int {
+	n := 0
+	for i := 0; i < len(pkts); i++ {
+		if !d.CanTx() {
+			break
+		}
+		d.Tx(pkts[i])
+		n++
+	}
+	d.SyncTx()
+	return n
+}
+
 func (d *Driver) Tx(pkt []byte) error {
 	phys, err := hugetlb.PhysAddr(pkt)
 	if err != nil {
@@ -321,23 +334,6 @@ func (d *Driver) SyncTx() {
 	}
 }
 
-func (d *Driver) ServeTx(ch chan []byte) {
-	for {
-		for len(ch) > 0 && d.CanTx() {
-			select {
-			case pkt, ok := <-ch:
-				if !ok {
-					return
-				}
-				d.Tx(pkt)
-			default:
-				break
-			}
-		}
-		d.SyncTx()
-	}
-}
-
 func (d *Driver) DiscardUnsetPackets() {
 	i := d.tdt
 	d.tdt = int(d.RegRead(TDT))
@@ -352,42 +348,24 @@ func (d *Driver) DiscardUnsetPackets() {
 	d.tdt = d.tdh
 }
 
-func (d *Driver) OldTx(pkt []byte) int {
-	tdt := d.RegRead(TDT)
-	tdh := d.RegRead(TDH)
-	if tdh == (tdt+1)%uint32(d.NumTxDesc) {
-		return 0
+func (d *Driver) RxBurst(pkts [][]byte) int {
+	d.SyncRx()
+	n := 0
+	for i := 0; i < len(pkts); i++ {
+		if !d.CanRx() {
+			break
+		}
+		pkt := d.Rx()
+		pkts[i] = pkt
+		n++
 	}
-
-	n := len(pkt)
-	d.TxBuf[tdt] = pkt
-	phys, err := hugetlb.PhysAddr(pkt)
-	if err != nil {
-		return 0
+	for d.CanAddRxBuf() {
+		p, phys, err := hugetlb.Alloc(2048)
+		if err != nil {
+			break
+		}
+		d.AddRxBuf(p, phys)
 	}
-	d.TxRing[tdt].Addr = phys
-
-	d.TxRing[tdt].Length = uint16(n)
-	cmd := TxCommandEOP
-	cmd |= TxCommandIFCS
-	cmd |= TxCommandRS
-	// cmd |= TxCommandIDE
-	d.TxRing[tdt].Command = cmd
-	d.TxRing[tdt].CSO = 0
-	d.TxRing[tdt].Status = 0
-	d.TxRing[tdt].CSS = 0
-	d.TxRing[tdt].Special = 0
-
-	d.RegWrite(TDT, (tdt+1)%uint32(d.NumTxDesc))
-
-	for d.TxRing[tdt].Status == 0 {
-		// d.logf("Tx status: %x\n", d.TxRing[tdt].Status)
-	}
-
-	// clear
-	hugetlb.Free(pkt)
-	d.TxBuf[tdt] = nil
-	d.TxRing[tdt].Addr = 0
 	return n
 }
 
@@ -441,28 +419,6 @@ func (d *Driver) SyncRx() {
 		d.rdh = d.NumRxDesc - 1
 	}
 	d.RegWrite(RDT, uint32(d.rdt))
-}
-
-func (d *Driver) Serve(ch chan []byte) {
-	n := 32
-	for {
-		d.SyncRx()
-		for i := 0; i < n; i++ {
-			if !d.CanRx() {
-				break
-			}
-			pkt := d.Rx()
-			ch <- pkt
-		}
-		for d.CanAddRxBuf() {
-			p, phys, err := hugetlb.Alloc(2048)
-			if err != nil {
-				d.logf("alloc failed %v\n", err)
-				break
-			}
-			d.AddRxBuf(p, phys)
-		}
-	}
 }
 
 func (d *Driver) UpdateStat(stat *Stat) {

@@ -40,10 +40,12 @@ func TestDriver(t *testing.T) {
 	txn := 8
 	d := NewDriver(dev, rxn, txn, nil)
 	d.Init()
-	ch := make(chan []byte, 10)
-	defer close(ch)
-	go d.Serve(ch)
-	for pkt := range ch {
-		log.Printf("pkt: %x\n", pkt)
+
+	pkts := make([][]byte, 8, 8)
+	for {
+		n := d.RxBurst(pkts)
+		for i := 0; i < n; i++ {
+			log.Printf("pkt: %x\n", pkts[i])
+		}
 	}
 }

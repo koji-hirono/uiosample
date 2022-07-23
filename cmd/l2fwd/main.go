@@ -19,6 +19,8 @@ import (
 var (
 	bRx1 = bench.New("Rx1 Packet")
 	bRx2 = bench.New("Rx2 Packet")
+	bTx1 = bench.New("Tx1 Packet")
+	bTx2 = bench.New("Tx2 Packet")
 )
 
 type Device struct {
@@ -27,7 +29,7 @@ type Device struct {
 	driver *e1000.Driver
 }
 
-func OpenDevice(unit int, addr *pci.Addr, rx, tx chan []byte) (*Device, error) {
+func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 	c, err := pci.NewConfig(unit)
 	if err != nil {
 		return nil, err
@@ -54,13 +56,10 @@ func OpenDevice(unit int, addr *pci.Addr, rx, tx chan []byte) (*Device, error) {
 
 	// rxn >= 8
 	// txn >= 8
-	rxn := 8
-	txn := 8
+	rxn := 64
+	txn := 64
 	driver := e1000.NewDriver(dev, rxn, txn, nil)
 	driver.Init()
-
-	go driver.Serve(rx)
-	go driver.ServeTx(tx)
 
 	return &Device{
 		c:      c,
@@ -82,11 +81,6 @@ func main() {
 	hugetlb.SetPages(128)
 	hugetlb.Init()
 
-	ch12 := make(chan []byte, 10)
-	defer close(ch12)
-	ch21 := make(chan []byte, 10)
-	defer close(ch21)
-
 	pciid1, err := strconv.ParseUint(os.Args[1], 0, 8)
 	if err != nil {
 		log.Fatal(err)
@@ -99,32 +93,71 @@ func main() {
 	}
 	addr2 := &pci.Addr{ID: uint8(pciid2)}
 
-	dev1, err := OpenDevice(0, addr1, ch21, ch12)
+	dev1, err := OpenDevice(0, addr1)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev1.Close()
 
-	dev2, err := OpenDevice(1, addr2, ch12, ch21)
+	dev2, err := OpenDevice(1, addr2)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev2.Close()
 
-	var stat e1000.Stat
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+
+	Serve(dev1.driver, dev2.driver, sig)
+
+	bRx1.Print()
+	bRx2.Print()
+	bTx1.Print()
+	bTx2.Print()
+
+	var stat1 e1000.Stat
+	dev1.driver.UpdateStat(&stat1)
+	PrintStat(&stat1)
+
+	var stat2 e1000.Stat
+	dev2.driver.UpdateStat(&stat2)
+
+	PrintStat(&stat2)
+
+	hugetlb.Stat()
+}
+
+func Serve(d1 *e1000.Driver, d2 *e1000.Driver, sig chan os.Signal) {
+	pkts := make([][]byte, 32, 32)
 	for {
 		select {
 		case <-sig:
-			bRx1.Print()
-			bRx2.Print()
-			dev1.driver.UpdateStat(&stat)
-			PrintStat(&stat)
-			dev2.driver.UpdateStat(&stat)
-			PrintStat(&stat)
-			hugetlb.Stat()
-			os.Exit(0)
+			return
+		default:
+		}
+		bRx1.Start()
+		n := d1.RxBurst(pkts)
+		bRx1.End()
+		for off := 0; off < n; {
+			bTx2.Start()
+			m := d2.TxBurst(pkts[off:n])
+			bTx2.End()
+			off += m
+			if off < n {
+				log.Printf("dev2 send [%v/%v]\n", off, n)
+			}
+		}
+		bRx2.Start()
+		n = d2.RxBurst(pkts)
+		bRx2.End()
+		for off := 0; off < n; {
+			bTx1.Start()
+			m := d1.TxBurst(pkts[off:n])
+			bTx1.End()
+			off += m
+			if off < n {
+				log.Printf("dev1 send [%v/%v]\n", off, n)
+			}
 		}
 	}
 }
