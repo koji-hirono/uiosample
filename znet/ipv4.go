@@ -29,6 +29,15 @@ func DecodeIPv4Hdr(b []byte) (*IPv4Hdr, int) {
 	return h, 20
 }
 
+func (h IPv4Hdr) Bytes() []byte {
+	var b []byte
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	hdr.Cap = h.Len()
+	hdr.Len = h.Len()
+	hdr.Data = uintptr(unsafe.Pointer(&h))
+	return b
+}
+
 func (h IPv4Hdr) Len() int {
 	return 20
 }
