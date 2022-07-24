@@ -29,7 +29,7 @@ ip netns exec SV ip addr add 70.70.0.2/24 dev enp0s10
 ip netns exec SV ip addr add 127.0.0.1/8 dev lo
 ip netns exec SV ip link set lo up
 ip netns exec SV ip route add default via 70.70.0.1
-ip netns exec SV ip link set enp0s10 mtu 1446
+ip netns exec SV ip link set enp0s10 mtu 1456
 
 ip netns add CL
 ip link set enp0s16 up netns CL
@@ -52,5 +52,5 @@ ip netns exec CL ./gogtp5g-tunnel add pdr gtp5gtest 1:1 --pcd 1 --hdr-rm 0 \
 ip netns exec CL ./gogtp5g-tunnel add pdr gtp5gtest 1:2 --pcd 2 \
 	--ue-ipv4 60.60.0.2 --far-id 2 --qer-id 123
 ip netns exec CL ip route add 70.70.0.0/24 dev gtp5gtest
-ip netns exec CL ip link set gtp5gtest mtu 1446
+ip netns exec CL ip link set gtp5gtest mtu 1456
 
