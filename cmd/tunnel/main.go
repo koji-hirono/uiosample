@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strconv"
 	"syscall"
 
 	"uiosample/e1000"
@@ -23,17 +22,15 @@ func main() {
 	hugetlb.SetPages(128)
 	hugetlb.Init()
 
-	pciid1, err := strconv.ParseUint(os.Args[1], 0, 8)
+	addr1, err := pci.ParseAddr(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
-	addr1 := &pci.Addr{ID: uint8(pciid1)}
 
-	pciid2, err := strconv.ParseUint(os.Args[2], 0, 8)
+	addr2, err := pci.ParseAddr(os.Args[2])
 	if err != nil {
 		log.Fatal(err)
 	}
-	addr2 := &pci.Addr{ID: uint8(pciid2)}
 
 	port1, err := OpenPort(0, addr1)
 	if err != nil {
