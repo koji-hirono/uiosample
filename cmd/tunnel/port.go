@@ -47,6 +47,10 @@ func (p *Port) Close() {
 	p.c.Close()
 }
 
+func (p *Port) Mac() []byte {
+	return p.driver.Mac
+}
+
 func (p *Port) RxBurst(pkts [][]byte) int {
 	return p.driver.RxBurst(pkts)
 }

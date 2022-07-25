@@ -1,12 +1,11 @@
 package main
 
 import (
-	"uiosample/e1000"
 	"uiosample/hugetlb"
 	"uiosample/znet"
 )
 
-func procICMP(d *e1000.Driver, eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte) error {
+func procICMP(port *Port, eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte) error {
 	icmp, _ := znet.DecodeICMPHdr(payload)
 	switch icmp.Type {
 	case znet.ICMPTypeEchoRequest:
@@ -22,7 +21,7 @@ func procICMP(d *e1000.Driver, eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []b
 	n := 0
 	hdr, m := znet.DecodeEtherHdr(b)
 	hdr.Dst = eth.Src
-	hdr.Src.Set(d.Mac)
+	hdr.Src.Set(port.Mac())
 	hdr.Type = eth.Type
 	n += m
 
@@ -60,7 +59,7 @@ func procICMP(d *e1000.Driver, eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []b
 
 	ipv4.Chksum.Set(znet.CalcChecksum(b[markipv4:markipv4end]))
 
-	for d.TxBurst([][]byte{b[:n]}) == 0 {
+	for port.TxBurst([][]byte{b[:n]}) == 0 {
 	}
 	return nil
 }

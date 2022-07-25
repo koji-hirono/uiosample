@@ -19,7 +19,7 @@ func (s *Server) procN6(pkt []byte) {
 }
 
 func (s *Server) procN6ARP(eth *znet.EtherHdr, payload []byte) error {
-	return procARP(s.port2.driver, eth, payload)
+	return procARP(s.port2, eth, payload)
 }
 
 func (s *Server) procN6IPv4(eth *znet.EtherHdr, payload []byte) error {
@@ -33,6 +33,13 @@ func (s *Server) procN6IPv4(eth *znet.EtherHdr, payload []byte) error {
 }
 
 func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
+	dstmac, ok := LookupMAC([]byte{30, 30, 0, 2})
+	if !ok {
+		// TODO: wait for ARP reply
+		sendARPRequest(s.port1, []byte{30, 30, 0, 2}, []byte{30, 30, 0, 1})
+		return nil
+	}
+
 	b, _, err := hugetlb.Alloc(2048)
 	if err != nil {
 		return err
@@ -42,7 +49,6 @@ func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
 
 	// new ether header
 	hdr, m := znet.DecodeEtherHdr(b)
-	dstmac := s.resolveMAC(ip.Dst[:])
 	hdr.Dst.Set(dstmac)
 	hdr.Src.Set(s.port1.driver.Mac)
 	hdr.Type.Set(znet.EtherTypeIPv4)
