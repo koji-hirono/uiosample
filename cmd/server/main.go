@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strconv"
 	"syscall"
 	_ "time"
 
@@ -34,14 +33,12 @@ func main() {
 		fmt.Printf("usage: %v <PCI ID>\n", prog)
 		os.Exit(1)
 	}
-	pciid, err := strconv.ParseUint(os.Args[1], 0, 8)
+	addr, err := pci.ParseAddr(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 	hugetlb.SetPages(128)
 	hugetlb.Init()
-
-	addr := &pci.Addr{ID: uint8(pciid)}
 
 	c, err := pci.NewConfig(0)
 	if err != nil {
