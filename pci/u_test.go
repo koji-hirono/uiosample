@@ -16,7 +16,7 @@ func TestDevUIO(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	c, err := NewConfig(0)
+	c, err := OpenConfig(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestCap(t *testing.T) {
-	c, err := NewConfig(0)
+	c, err := OpenConfig(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +69,11 @@ func TestMapResource(t *testing.T) {
 		ID:     10,
 		Func:   0,
 	}
-	device, err := NewDevice(addr, nil)
+	device, err := OpenDevice(addr, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer device.Close()
 	for i, res := range device.Ress {
 		log.Printf("Res[%v]:\n", i)
 		if res != nil {

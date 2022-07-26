@@ -20,7 +20,7 @@ type Config struct {
 	fd int
 }
 
-func NewConfig(id int) (*Config, error) {
+func OpenConfig(id int) (*Config, error) {
 	c := new(Config)
 	c.id = id
 	fname := fmt.Sprintf("/sys/class/uio/uio%v/device/config", id)

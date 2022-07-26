@@ -29,7 +29,7 @@ type Device struct {
 }
 
 func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
-	c, err := pci.NewConfig(unit)
+	c, err := pci.OpenConfig(unit)
 	if err != nil {
 		return nil, err
 	}
@@ -47,17 +47,22 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 	}
 	log.Printf("Config:\n%v\n", s)
 
-	dev, err := pci.NewDevice(addr, c)
+	dev, err := pci.OpenDevice(addr, c)
 	if err != nil {
 		c.Close()
 		return nil, err
 	}
+	defer dev.Close()
 
 	// rxn >= 8
 	// txn >= 8
 	rxn := 64
 	txn := 64
-	driver := e1000.NewDriver(dev, rxn, txn, nil)
+	driver, err := e1000.NewDriver(dev, rxn, txn, nil)
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
 	driver.Init()
 
 	return &Device{
@@ -68,6 +73,7 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 }
 
 func (d *Device) Close() {
+	d.dev.Close()
 	d.c.Close()
 }
 

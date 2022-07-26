@@ -14,7 +14,7 @@ func TestDriver(t *testing.T) {
 
 	addr := &pci.Addr{ID: 17}
 
-	c, err := pci.NewConfig(0)
+	c, err := pci.OpenConfig(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,14 +31,18 @@ func TestDriver(t *testing.T) {
 	}
 	log.Printf("Config:\n%v\n", s)
 
-	dev, err := pci.NewDevice(addr, c)
+	dev, err := pci.OpenDevice(addr, c)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer dev.Close()
 
 	rxn := 8
 	txn := 8
-	d := NewDriver(dev, rxn, txn, nil)
+	d, err := NewDriver(dev, rxn, txn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	d.Init()
 
 	pkts := make([][]byte, 8, 8)

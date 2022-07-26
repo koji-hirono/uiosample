@@ -12,7 +12,7 @@ type Port struct {
 }
 
 func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
-	c, err := pci.NewConfig(unit)
+	c, err := pci.OpenConfig(unit)
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 		return nil, err
 	}
 
-	dev, err := pci.NewDevice(addr, c)
+	dev, err := pci.OpenDevice(addr, c)
 	if err != nil {
 		c.Close()
 		return nil, err
@@ -33,7 +33,12 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 	// txn >= 8
 	rxn := 64
 	txn := 64
-	driver := e1000.NewDriver(dev, rxn, txn, nil)
+	driver, err := e1000.NewDriver(dev, rxn, txn, nil)
+	if err != nil {
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
 	driver.Init()
 
 	return &Port{
@@ -44,6 +49,7 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 }
 
 func (p *Port) Close() {
+	p.dev.Close()
 	p.c.Close()
 }
 

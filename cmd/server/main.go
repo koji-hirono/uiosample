@@ -40,7 +40,7 @@ func main() {
 	hugetlb.SetPages(128)
 	hugetlb.Init()
 
-	c, err := pci.NewConfig(0)
+	c, err := pci.OpenConfig(0)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,16 +57,20 @@ func main() {
 	}
 	log.Printf("Config:\n%v\n", s)
 
-	dev, err := pci.NewDevice(addr, c)
+	dev, err := pci.OpenDevice(addr, c)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer dev.Close()
 
 	// rxn >= 8
 	// txn >= 8
 	rxn := 32
 	txn := 32
-	d := e1000.NewDriver(dev, rxn, txn, nil)
+	d, err := e1000.NewDriver(dev, rxn, txn, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	d.Init()
 
 	sig := make(chan os.Signal, 1)

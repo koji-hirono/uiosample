@@ -20,6 +20,7 @@ type Stat struct {
 
 type Driver struct {
 	Dev       *pci.Device
+	BAR0      pci.Resource
 	Logger    *log.Logger
 	NumRxDesc int
 	NumTxDesc int
@@ -35,9 +36,14 @@ type Driver struct {
 	tdt       int
 }
 
-func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) *Driver {
+func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) (*Driver, error) {
 	d := new(Driver)
+	res, err := dev.GetResource(0)
+	if err != nil {
+		return nil, err
+	}
 	d.Dev = dev
+	d.BAR0 = res
 	if logger == nil {
 		d.Logger = log.Default()
 	} else {
@@ -45,19 +51,19 @@ func NewDriver(dev *pci.Device, nrxd, ntxd int, logger *log.Logger) *Driver {
 	}
 	d.NumRxDesc = nrxd
 	d.NumTxDesc = ntxd
-	return d
+	return d, nil
 }
 
 func (d *Driver) RegRead(reg int) uint32 {
-	return d.Dev.Ress[0].Read32(reg)
+	return d.BAR0.Read32(reg)
 }
 
 func (d *Driver) RegWrite(reg int, val uint32) {
-	d.Dev.Ress[0].Write32(reg, val)
+	d.BAR0.Write32(reg, val)
 }
 
 func (d *Driver) RegMaskWrite(reg int, val, mask uint32) {
-	d.Dev.Ress[0].MaskWrite32(reg, val, mask)
+	d.BAR0.MaskWrite32(reg, val, mask)
 }
 
 func (d *Driver) logf(format string, v ...interface{}) {
