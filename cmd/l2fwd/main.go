@@ -52,7 +52,6 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 		c.Close()
 		return nil, err
 	}
-	defer dev.Close()
 
 	// rxn >= 8
 	// txn >= 8
@@ -60,6 +59,7 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 	txn := 64
 	driver, err := e1000.NewDriver(dev, rxn, txn, nil)
 	if err != nil {
+		dev.Close()
 		c.Close()
 		return nil, err
 	}
