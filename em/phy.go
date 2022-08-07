@@ -1,0 +1,508 @@
+package em
+
+import (
+	"errors"
+)
+
+// PHY ID
+const (
+	M88E1000_E_PHY_ID   uint32 = 0x01410C50
+	M88E1000_I_PHY_ID          = 0x01410C30
+	M88E1011_I_PHY_ID          = 0x01410C20
+	IGP01E1000_I_PHY_ID        = 0x02A80380
+	M88E1111_I_PHY_ID          = 0x01410CC0
+	M88E1543_E_PHY_ID          = 0x01410EA0
+	M88E1512_E_PHY_ID          = 0x01410DD0
+	M88E1112_E_PHY_ID          = 0x01410C90
+	I347AT4_E_PHY_ID           = 0x01410DC0
+	M88E1340M_E_PHY_ID         = 0x01410DF0
+	GG82563_E_PHY_ID           = 0x01410CA0
+	IGP03E1000_E_PHY_ID        = 0x02A80390
+	IFE_E_PHY_ID               = 0x02A80330
+	IFE_PLUS_E_PHY_ID          = 0x02A80320
+	IFE_C_E_PHY_ID             = 0x02A80310
+	BME1000_E_PHY_ID           = 0x01410CB0
+	BME1000_E_PHY_ID_R2        = 0x01410CB1
+	I82577_E_PHY_ID            = 0x01540050
+	I82578_E_PHY_ID            = 0x004DD040
+	I82579_E_PHY_ID            = 0x01540090
+	I217_E_PHY_ID              = 0x015400A0
+	I82580_I_PHY_ID            = 0x015403A0
+	I350_I_PHY_ID              = 0x015403B0
+	I210_I_PHY_ID              = 0x01410C00
+	IGP04E1000_E_PHY_ID        = 0x02A80391
+	M88_VENDOR                 = 0x0141
+)
+
+type PHYType int
+
+const (
+	PHYTypeUnknown PHYType = iota
+	PHYTypeNone
+	PHYTypeM88
+	PHYTypeIgp
+	PHYTypeIgp2
+	PHYTypeGg82563
+	PHYTypeIgp3
+	PHYTypeIfe
+	PHYTypeBm
+	PHYType82578
+	PHYType82577
+	PHYType82579
+	PHYTypeI217
+	PHYType82580
+	PHYTypeVf
+	PHYTypeI210
+)
+
+// enum e1000_phy_type e1000_get_phy_type_from_id(u32 phy_id)
+func PHYTypeGet(phyid uint32) PHYType {
+	switch phyid {
+	case M88E1000_I_PHY_ID:
+		return PHYTypeM88
+	case M88E1000_E_PHY_ID:
+		return PHYTypeM88
+	case M88E1111_I_PHY_ID:
+		return PHYTypeM88
+	case M88E1011_I_PHY_ID:
+		return PHYTypeM88
+	case M88E1543_E_PHY_ID:
+		return PHYTypeM88
+	case M88E1512_E_PHY_ID:
+		return PHYTypeM88
+	case I347AT4_E_PHY_ID:
+		return PHYTypeM88
+	case M88E1112_E_PHY_ID:
+		return PHYTypeM88
+	case M88E1340M_E_PHY_ID:
+		return PHYTypeM88
+
+	case IGP01E1000_I_PHY_ID:
+		// IGP 1 & 2 share this
+		return PHYTypeIgp2
+	case GG82563_E_PHY_ID:
+		return PHYTypeGg82563
+	case IGP03E1000_E_PHY_ID:
+		return PHYTypeIgp3
+
+	case IFE_E_PHY_ID:
+		return PHYTypeIfe
+	case IFE_PLUS_E_PHY_ID:
+		return PHYTypeIfe
+	case IFE_C_E_PHY_ID:
+		return PHYTypeIfe
+
+	case BME1000_E_PHY_ID:
+		return PHYTypeBm
+	case BME1000_E_PHY_ID_R2:
+		return PHYTypeBm
+
+	case I82578_E_PHY_ID:
+		return PHYType82578
+	case I82577_E_PHY_ID:
+		return PHYType82577
+	case I82579_E_PHY_ID:
+		return PHYType82579
+	case I217_E_PHY_ID:
+		return PHYTypeI217
+	case I82580_I_PHY_ID:
+		return PHYType82580
+	case I210_I_PHY_ID:
+		return PHYTypeI210
+	default:
+		return PHYTypeUnknown
+	}
+}
+
+type E1000TRxStatus int
+
+const (
+	E1000TRxStatusNotOk E1000TRxStatus = iota
+	E1000TRxStatusOk
+	E1000TRxStatusUndefined = 0xff
+)
+
+type MSType int
+
+const (
+	MSTypeHwDefault MSType = iota
+	MSTypeForceMaster
+	MSTypeForceSlave
+	MSTypeAuto
+)
+
+type RevPolarity int
+
+const (
+	RevPolarityNormal RevPolarity = iota
+	RevPolarityReversed
+	RevPolarityUndefined = 0xff
+)
+
+type SmartSpeed int
+
+const (
+	SmartSpeedDefault SmartSpeed = iota
+	SmartSpeedOn
+	SmartSpeedOff
+)
+
+type MediaType int
+
+const (
+	MediaTypeUnknown MediaType = iota
+	MediaTypeCopper
+	MediaTypeFiber
+	MediaTypeInternalSerdes
+	NumMediaType
+)
+
+type PHYStats struct {
+	IdleErrors    uint32
+	ReceiveErrors uint32
+}
+
+const (
+	ADVERTISE_10_HALF uint16 = 1 << iota
+	ADVERTISE_10_FULL
+	ADVERTISE_100_HALF
+	ADVERTISE_100_FULL
+	ADVERTISE_1000_HALF
+	ADVERTISE_1000_FULL
+
+	ALL_SPEED_DUPLEX = ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL | ADVERTISE_1000_FULL
+	ALL_NOT_GIG      = ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL
+	ALL_100_SPEED    = ADVERTISE_100_HALF | ADVERTISE_100_FULL
+	ALL_10_SPEED     = ADVERTISE_10_HALF | ADVERTISE_10_FULL
+	ALL_HALF_DUPLEX  = ADVERTISE_10_HALF | ADVERTISE_100_HALF
+
+	AUTONEG_ADVERTISE_SPEED_DEFAULT = ALL_SPEED_DUPLEX
+)
+
+const CABLE_LENGTH_UNDEFINED uint16 = 0xff
+
+const FIBER_LINK_UP_LIMIT = 50
+const COPPER_LINK_UP_LIMIT = 10
+const PHY_AUTO_NEG_LIMIT = 45
+const PHY_FORCE_LIMIT = 20
+
+const MAX_PHY_ADDR uint32 = 8
+
+type PHYInfo struct {
+	Op            PHYOp
+	PHYType       PHYType
+	LocalRx       E1000TRxStatus
+	RemoteRx      E1000TRxStatus
+	MSType        MSType
+	OrigMSType    MSType
+	CablePolarity RevPolarity
+	SmartSpeed    SmartSpeed
+
+	Addr         uint32
+	ID           uint32
+	ResetDelayUS uint32
+	Revision     uint32
+
+	MediaType MediaType
+
+	AutonegAdvertised uint16
+	AutonegMask       uint16
+	CableLength       uint16
+	MaxCableLength    uint16
+	MinCableLength    uint16
+
+	MDIX uint8
+
+	DisablePolarityCorrection bool
+	IsMDIX                    bool
+	PolarityCorrection        bool
+	SpeedDowngraded           bool
+	AutonegWaitToComplete     bool
+}
+
+type PHYOp interface {
+	InitParam() error
+	Acquire() error
+	CfgOnLinkUp() error
+	CheckPolarity() error
+	CheckResetBlock() error
+	Commit() error
+	ForceSpeedDuplex() error
+	GetCfgDone() error
+	GetCableLength() error
+	GetInfo() error
+	SetPage(uint16) error
+	ReadReg(uint32) (uint16, error)
+	ReadRegLocked(uint32) (uint16, error)
+	ReadRegPage(uint32) (uint16, error)
+	Release()
+	Reset() error
+	SetD0LpluState(bool) error
+	SetD3LpluState(bool) error
+	WriteReg(uint32, uint16) error
+	WriteRegLocked(uint32, uint16) error
+	WriteRegPage(uint32, uint16) error
+	PowerUp()
+	PowerDown()
+	ReadI2CByte(uint8, uint8) (byte, error)
+	WriteI2CByte(uint8, uint8, byte) error
+}
+
+/*
+   s32  (*init_params)(struct e1000_hw *);
+   s32  (*acquire)(struct e1000_hw *);
+   s32  (*cfg_on_link_up)(struct e1000_hw *);
+   s32  (*check_polarity)(struct e1000_hw *);
+   s32  (*check_reset_block)(struct e1000_hw *);
+   s32  (*commit)(struct e1000_hw *);
+   s32  (*force_speed_duplex)(struct e1000_hw *);
+   s32  (*get_cfg_done)(struct e1000_hw *hw);
+   s32  (*get_cable_length)(struct e1000_hw *);
+   s32  (*get_info)(struct e1000_hw *);
+   s32  (*set_page)(struct e1000_hw *, u16);
+   s32  (*read_reg)(struct e1000_hw *, u32, u16 *);
+   s32  (*read_reg_locked)(struct e1000_hw *, u32, u16 *);
+   s32  (*read_reg_page)(struct e1000_hw *, u32, u16 *);
+   void (*release)(struct e1000_hw *);
+   s32  (*reset)(struct e1000_hw *);
+   s32  (*set_d0_lplu_state)(struct e1000_hw *, bool);
+   s32  (*set_d3_lplu_state)(struct e1000_hw *, bool);
+   s32  (*write_reg)(struct e1000_hw *, u32, u16);
+   s32  (*write_reg_locked)(struct e1000_hw *, u32, u16);
+   s32  (*write_reg_page)(struct e1000_hw *, u32, u16);
+   void (*power_up)(struct e1000_hw *);
+   void (*power_down)(struct e1000_hw *);
+   s32 (*read_i2c_byte)(struct e1000_hw *, u8, u8, u8 *);
+   s32 (*write_i2c_byte)(struct e1000_hw *, u8, u8, u8);
+*/
+
+func GetPHYID(hw *HW) error {
+	phy := &hw.PHY
+	for i := 0; i < 2; i++ {
+		id1, err := phy.Op.ReadReg(PHY_ID1)
+		if err != nil {
+			return err
+		}
+		phy.ID = uint32(id1) << 16
+
+		// usec_delay(20)
+
+		id2, err := phy.Op.ReadReg(PHY_ID2)
+		if err != nil {
+			return err
+		}
+		phy.ID |= uint32(id2) & PHY_REVISION_MASK
+		phy.Revision = uint32(id2) &^ PHY_REVISION_MASK
+
+		if phy.ID != 0 && phy.ID != PHY_REVISION_MASK {
+			return nil
+		}
+	}
+	return nil
+}
+
+func GetCfgDone(hw *HW) error {
+	// msec_delay_irq(10)
+	return nil
+}
+
+func PHYSWReset(hw *HW) error {
+	phy := &hw.PHY
+
+	ctrl, err := phy.Op.ReadReg(PHY_CONTROL)
+	if err != nil {
+		return err
+	}
+
+	ctrl |= MII_CR_RESET
+	err = phy.Op.WriteReg(PHY_CONTROL, ctrl)
+	if err != nil {
+		return err
+	}
+
+	// usec_delay(1)
+	return nil
+}
+
+func PHYHWReset(hw *HW) error {
+	phy := &hw.PHY
+	err := phy.Op.CheckResetBlock()
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.Acquire()
+	if err != nil {
+		return err
+	}
+	defer phy.Op.Release()
+
+	ctrl := hw.RegRead(CTRL)
+	hw.RegWrite(CTRL, ctrl|CTRL_PHY_RST)
+	hw.RegWriteFlush()
+
+	// usec_delay(phy.ResetDelayUS)
+
+	hw.RegWrite(CTRL, ctrl)
+	hw.RegWriteFlush()
+
+	// usec_delay(150)
+
+	return phy.Op.GetCfgDone()
+}
+
+func PHYHasLink(hw *HW, n int, interval int) (bool, error) {
+	for i := 0; i < n; i++ {
+		// Some PHYs require the PHY_STATUS register to be read
+		// twice due to the link bit being sticky.  No harm doing
+		// it across the board.
+		_, err := hw.PHY.Op.ReadReg(PHY_STATUS)
+		if err != nil {
+			// If the first read fails, another entity may have
+			// ownership of the resources, wait and try again to
+			// see if they have relinquished the resources yet.
+			if interval >= 1000 {
+				//msec_delay(interval/1000)
+			} else {
+				//usec_delay(interval)
+			}
+		}
+		status, err := hw.PHY.Op.ReadReg(PHY_STATUS)
+		if err != nil {
+			return false, err
+		}
+		if status&MII_SR_LINK_STATUS != 0 {
+			return true, nil
+		}
+		if interval >= 1000 {
+			// msec_delay(interval/1000)
+		} else {
+			// usec_delay(interval)
+		}
+	}
+	return false, errors.New("retry timeout")
+}
+
+func PHYResetDSP(hw *HW) error {
+	err := hw.PHY.Op.WriteReg(M88E1000_PHY_GEN_CONTROL, 0xc1)
+	if err != nil {
+		return err
+	}
+
+	return hw.PHY.Op.WriteReg(M88E1000_PHY_GEN_CONTROL, 0)
+}
+
+func ReadPHYRegMDIC(hw *HW, offset uint32) (uint16, error) {
+	phy := &hw.PHY
+
+	if offset > MAX_PHY_REG_ADDRESS {
+		return 0, errors.New("out of range")
+	}
+
+	// Set up Op-code, Phy Address, and register offset in the MDI
+	// Control register.  The MAC will take care of interfacing with the
+	// PHY to retrieve the desired data.
+	mdic := offset << MDIC_REG_SHIFT
+	mdic |= phy.Addr << MDIC_PHY_SHIFT
+	mdic |= MDIC_OP_READ
+	hw.RegWrite(MDIC, mdic)
+
+	// Poll the ready bit to see if the MDI read completed
+	// Increasing the time out as testing showed failures with
+	// the lower time out
+	for i := 0; i < GEN_POLL_TIMEOUT*3; i++ {
+		// usec_delay_irq(50)
+		mdic = hw.RegRead(MDIC)
+		if mdic&MDIC_READY != 0 {
+			break
+		}
+	}
+	if mdic&MDIC_READY == 0 {
+		return 0, errors.New("MDI Read did not complete")
+	}
+	if mdic&MDIC_ERROR != 0 {
+		return 0, errors.New("MDI Error")
+	}
+	if (mdic&MDIC_REG_MASK)>>MDIC_REG_SHIFT != offset {
+		return 0, errors.New("MDI Read offset error")
+	}
+
+	// Allow some time after each MDIC transaction to avoid
+	// reading duplicate data in the next MDIC transaction.
+	if hw.MAC.Type == MACTypePch2lan {
+		// usec_delay_irq(100)
+	}
+
+	return uint16(mdic), nil
+}
+
+func WritePHYRegMDIC(hw *HW, offset uint32, val uint16) error {
+	phy := &hw.PHY
+
+	if offset > MAX_PHY_REG_ADDRESS {
+		return errors.New("out of range")
+	}
+
+	// Set up Op-code, Phy Address, and register offset in the MDI
+	// Control register.  The MAC will take care of interfacing with the
+	// PHY to retrieve the desired data.
+	mdic := uint32(val)
+	mdic |= offset << MDIC_REG_SHIFT
+	mdic |= phy.Addr << MDIC_PHY_SHIFT
+	mdic |= MDIC_OP_WRITE
+	hw.RegWrite(MDIC, mdic)
+
+	// Poll the ready bit to see if the MDI read completed
+	// Increasing the time out as testing showed failures with
+	// the lower time out
+	for i := 0; i < GEN_POLL_TIMEOUT*3; i++ {
+		// usec_delay_irq(50)
+		mdic = hw.RegRead(MDIC)
+		if mdic&MDIC_READY != 0 {
+			break
+		}
+	}
+	if mdic&MDIC_READY == 0 {
+		return errors.New("MDI Write did not complete")
+	}
+	if mdic&MDIC_ERROR != 0 {
+		return errors.New("MDI Error")
+	}
+	if (mdic&MDIC_REG_MASK)>>MDIC_REG_SHIFT != offset {
+		return errors.New("MDI Write offset error")
+	}
+	// Allow some time after each MDIC transaction to avoid
+	// reading duplicate data in the next MDIC transaction.
+	if hw.MAC.Type == MACTypePch2lan {
+		// usec_delay_irq(100)
+	}
+
+	return nil
+}
+
+func DeterminePHYAddress(hw *HW) error {
+	hw.PHY.PHYType = PHYTypeUnknown
+	for addr := uint32(0); addr < MAX_PHY_ADDR; addr++ {
+		hw.PHY.Addr = addr
+		for i := 0; i < 10; i++ {
+			GetPHYID(hw)
+			t := PHYTypeGet(hw.PHY.ID)
+			// If phy_type is valid, break - we found our
+			// PHY address
+			if t != PHYTypeUnknown {
+				return nil
+			}
+			// msec_delay(1)
+		}
+	}
+
+	return errors.New("not found")
+}
+
+func SetupCopperLink(hw *HW) error {
+	return nil
+}
+
+func SetupFiberSerdesLink(hw *HW) error {
+	return nil
+}
