@@ -495,14 +495,247 @@ func DeterminePHYAddress(hw *HW) error {
 			// msec_delay(1)
 		}
 	}
-
 	return errors.New("not found")
 }
 
-func SetupCopperLink(hw *HW) error {
+func WaitAutoneg(hw *HW) error {
+	phy := &hw.PHY
+	// Break after autoneg completes or PHY_AUTO_NEG_LIMIT expires.
+	for i := PHY_AUTO_NEG_LIMIT; i > 0; i-- {
+		_, err := phy.Op.ReadReg(PHY_STATUS)
+		if err != nil {
+			return err
+		}
+		status, err := phy.Op.ReadReg(PHY_STATUS)
+		if err != nil {
+			return err
+		}
+		if status&MII_SR_AUTONEG_COMPLETE != 0 {
+			break
+		}
+		// msec_delay(100)
+	}
+
+	// PHY_AUTO_NEG_TIME expiration doesn't guarantee auto-negotiation
+	// has completed.
+	return nil
+}
+
+func PHYSetupAutoneg(hw *HW) error {
+	phy := &hw.PHY
+
+	phy.AutonegAdvertised &= phy.AutonegMask
+
+	// Read the MII Auto-Neg Advertisement Register (Address 4).
+	adv, err := phy.Op.ReadReg(PHY_AUTONEG_ADV)
+	if err != nil {
+		return err
+	}
+
+	var ctrl uint16
+	if phy.AutonegMask&ADVERTISE_1000_FULL != 0 {
+		// Read the MII 1000Base-T Control Register (Address 9).
+		x, err := phy.Op.ReadReg(PHY_1000T_CTRL)
+		if err != nil {
+			return err
+		}
+		ctrl = x
+	}
+
+	// Need to parse both autoneg_advertised and fc and set up
+	// the appropriate PHY registers.  First we will parse for
+	// autoneg_advertised software override.  Since we can advertise
+	// a plethora of combinations, we need to check each bit
+	// individually.
+
+	// First we clear all the 10/100 mb speed bits in the Auto-Neg
+	// Advertisement Register (Address 4) and the 1000 mb speed bits in
+	// the  1000Base-T Control Register (Address 9).
+	adv &^= NWAY_AR_100TX_FD_CAPS | NWAY_AR_100TX_HD_CAPS | NWAY_AR_10T_FD_CAPS | NWAY_AR_10T_HD_CAPS
+	ctrl &^= CR_1000T_HD_CAPS | CR_1000T_FD_CAPS
+
+	// Do we want to advertise 10 Mb Half Duplex?
+	if phy.AutonegAdvertised&ADVERTISE_10_HALF != 0 {
+		adv |= NWAY_AR_10T_HD_CAPS
+	}
+
+	// Do we want to advertise 10 Mb Full Duplex?
+	if phy.AutonegAdvertised&ADVERTISE_10_FULL != 0 {
+		adv |= NWAY_AR_10T_FD_CAPS
+	}
+
+	// Do we want to advertise 100 Mb Half Duplex?
+	if phy.AutonegAdvertised&ADVERTISE_100_HALF != 0 {
+		adv |= NWAY_AR_100TX_HD_CAPS
+	}
+
+	// Do we want to advertise 100 Mb Full Duplex?
+	if phy.AutonegAdvertised&ADVERTISE_100_FULL != 0 {
+		adv |= NWAY_AR_100TX_FD_CAPS
+	}
+
+	// We do not allow the Phy to advertise 1000 Mb Half Duplex
+	if phy.AutonegAdvertised&ADVERTISE_1000_HALF != 0 {
+	}
+
+	// Do we want to advertise 1000 Mb Full Duplex?
+	if phy.AutonegAdvertised&ADVERTISE_1000_FULL != 0 {
+		ctrl |= CR_1000T_FD_CAPS
+	}
+
+	// Check for a software override of the flow control settings, and
+	// setup the PHY advertisement registers accordingly.  If
+	// auto-negotiation is enabled, then software will have to set the
+	// "PAUSE" bits to the correct value in the Auto-Negotiation
+	// Advertisement Register (PHY_AUTONEG_ADV) and re-start auto-
+	// negotiation.
+	//
+	// The possible values of the "fc" parameter are:
+	//      0:  Flow control is completely disabled
+	//      1:  Rx flow control is enabled (we can receive pause frames
+	//          but not send pause frames).
+	//      2:  Tx flow control is enabled (we can send pause frames
+	//          but we do not support receiving pause frames).
+	//      3:  Both Rx and Tx flow control (symmetric) are enabled.
+	//  other:  No software override.  The flow control configuration
+	//          in the EEPROM is used.
+	switch hw.FC.CurrentMode {
+	case FCModeNone:
+		// Flow control (Rx & Tx) is completely disabled by a
+		// software over-ride.
+		adv &^= NWAY_AR_ASM_DIR | NWAY_AR_PAUSE
+	case FCModeRxPause:
+		// Rx Flow control is enabled, and Tx Flow control is
+		// disabled, by a software over-ride.
+		//
+		// Since there really isn't a way to advertise that we are
+		// capable of Rx Pause ONLY, we will advertise that we
+		// support both symmetric and asymmetric Rx PAUSE.  Later
+		// (in e1000_config_fc_after_link_up) we will disable the
+		// hw's ability to send PAUSE frames.
+		adv |= NWAY_AR_ASM_DIR | NWAY_AR_PAUSE
+	case FCModeTxPause:
+		// Tx Flow control is enabled, and Rx Flow control is
+		// disabled, by a software over-ride.
+		adv |= NWAY_AR_ASM_DIR
+		adv &^= NWAY_AR_PAUSE
+	case FCModeFull:
+		// Flow control (both Rx and Tx) is enabled by a software
+		// over-ride.
+		adv |= NWAY_AR_ASM_DIR | NWAY_AR_PAUSE
+	default:
+		return errors.New("Flow control param set incorrectly")
+	}
+
+	err = phy.Op.WriteReg(PHY_AUTONEG_ADV, adv)
+	if err != nil {
+		return err
+	}
+
+	if phy.AutonegMask&ADVERTISE_1000_FULL != 0 {
+		err := phy.Op.WriteReg(PHY_1000T_CTRL, ctrl)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func SetupFiberSerdesLink(hw *HW) error {
+	ctrl := hw.RegRead(CTRL)
+
+	// Take the link out of reset
+	ctrl &^= CTRL_LRST
+
+	hw.MAC.Op.ConfigCollisionDist()
+
+	err := CommitFCSettings(hw)
+	if err != nil {
+		return err
+	}
+
+	// Since auto-negotiation is enabled, take the link out of reset (the
+	// link will be in reset, because we previously reset the chip). This
+	// will restart auto-negotiation.  If auto-negotiation is successful
+	// then the link-up status bit will be set and the flow control enable
+	// bits (RFCE and TFCE) will be set according to their negotiated value.
+
+	hw.RegWrite(CTRL, ctrl)
+	hw.RegWriteFlush()
+	//msec_delay(1)
+
+	// For these adapters, the SW definable pin 1 is set when the optics
+	// detect a signal.  If we have a signal, then poll for a "Link-Up"
+	// indication.
+	if hw.PHY.MediaType != MediaTypeInternalSerdes {
+		return nil
+	}
+	ctrl = hw.RegRead(CTRL)
+	if ctrl&CTRL_SWDPIN1 == 0 {
+		return nil
+	}
+	return PollFiberSerdesLink(hw)
+}
+
+func PollFiberSerdesLink(hw *HW) error {
+	mac := &hw.MAC
+
+	// If we have a signal (the cable is plugged in, or assumed true for
+	// serdes media) then poll for a "Link-Up" indication in the Device
+	// Status Register.  Time-out if a link isn't seen in 500 milliseconds
+	// seconds (Auto-negotiation should complete in less than 500
+	// milliseconds even if the other end is doing it in SW).
+	var i int
+	for ; i < FIBER_LINK_UP_LIMIT; i++ {
+		// msec_delay(10)
+		status := hw.RegRead(STATUS)
+		if status&STATUS_LU != 0 {
+			break
+		}
+	}
+	if i == FIBER_LINK_UP_LIMIT {
+		mac.AutonegFailed = true
+		// AutoNeg failed to achieve a link, so we'll call
+		// mac->check_for_link. This routine will force the
+		// link up if we detect a signal. This will allow us to
+		// communicate with non-autonegotiating link partners.
+		err := mac.Op.CheckForLink()
+		if err != nil {
+			return err
+		}
+		mac.AutonegFailed = false
+	} else {
+		mac.AutonegFailed = false
+	}
+
+	return nil
+}
+
+func CheckDownshift(hw *HW) error {
+	phy := &hw.PHY
+	var offset uint32
+	var mask uint16
+	switch phy.PHYType {
+	case PHYTypeI210, PHYTypeM88, PHYTypeGg82563, PHYTypeBm, PHYType82578:
+		offset = M88E1000_PHY_SPEC_STATUS
+		mask = M88E1000_PSSR_DOWNSHIFT
+		break
+	case PHYTypeIgp, PHYTypeIgp2, PHYTypeIgp3:
+		offset = IGP01E1000_PHY_LINK_HEALTH
+		mask = IGP01E1000_PLHR_SS_DOWNGRADE
+		break
+	default:
+		// speed downshift not supported
+		phy.SpeedDowngraded = false
+		return nil
+	}
+
+	data, err := phy.Op.ReadReg(offset)
+	if err != nil {
+		return err
+	}
+	phy.SpeedDowngraded = data&mask != 0
+
 	return nil
 }

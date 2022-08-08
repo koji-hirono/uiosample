@@ -1,0 +1,6 @@
+package em
+
+const (
+	IGP01E1000_PHY_LINK_HEALTH   = 0x13 // PHY Link Health
+	IGP01E1000_PLHR_SS_DOWNGRADE = 0x8000
+)

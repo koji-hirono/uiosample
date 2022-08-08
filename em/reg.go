@@ -49,6 +49,12 @@ const (
 	// Flow Control Transmit Timer Value - RW
 	FCTTV = 0x0170
 
+	// Tx Configuration Word - RW
+	TXCW = 0x0178
+
+	// Rx Configuration Word - RO
+	RXCW = 0x0180
+
 	// Transmit Control
 	TCTL = 0x0400
 
@@ -266,6 +272,21 @@ const (
 	// TCP Segmentation Context Tx Fail - R/clr
 	TSCTFC = 0x40fc
 
+	// PCS Configuration 0 - RW
+	PCS_CFG0 = 0x4200
+
+	// PCS Link Control - RW
+	PCS_LCTL = 0x4208
+
+	// PCS Link Status - RO
+	PCS_LSTAT = 0x420c
+
+	// AN advertisement - RW
+	PCS_ANADV = 0x4218
+
+	// Link Partner Ability - RW
+	PCS_LPAB = 0x0421c
+
 	// Multicast Table Array - RW Array
 	MTA = 0x5200
 
@@ -289,37 +310,37 @@ const (
 // CTRL
 const (
 	CTRL_FD                 uint32 = 0x00000001 // Full duplex.0=half; 1=full
-	CTRL_PRIOR                     = 0x00000004 // Priority on PCI. 0=rx,1=fair
-	CTRL_GIO_MASTER_DISABLE        = 0x00000004 //Blocks new Master reqs
-	CTRL_LRST                      = 0x00000008 // Link reset. 0=normal,1=reset
-	CTRL_ASDE                      = 0x00000020 // Auto-speed detect enable
-	CTRL_SLU                       = 0x00000040 // Set link up (Force Link)
-	CTRL_ILOS                      = 0x00000080 // Invert Loss-Of Signal
-	CTRL_SPD_SEL                   = 0x00000300 // Speed Select Mask
-	CTRL_SPD_10                    = 0x00000000 // Force 10Mb
-	CTRL_SPD_100                   = 0x00000100 // Force 100Mb
-	CTRL_SPD_1000                  = 0x00000200 // Force 1Gb
-	CTRL_FRCSPD                    = 0x00000800 // Force Speed
-	CTRL_FRCDPX                    = 0x00001000 // Force Duplex
-	CTRL_LANPHYPC_OVERRIDE         = 0x00010000 // SW control of LANPHYPC
-	CTRL_LANPHYPC_VALUE            = 0x00020000 // SW value of LANPHYPC
-	CTRL_MEHE                      = 0x00080000 // Memory Error Handling Enable
-	CTRL_SWDPIN0                   = 0x00040000 // SWDPIN 0 value
-	CTRL_SWDPIN1                   = 0x00080000 // SWDPIN 1 value
-	CTRL_SWDPIN2                   = 0x00100000 // SWDPIN 2 value
-	CTRL_ADVD3WUC                  = 0x00100000 // D3 WUC
-	CTRL_EN_PHY_PWR_MGMT           = 0x00200000 // PHY PM enable
-	CTRL_SWDPIN3                   = 0x00200000 // SWDPIN 3 value
-	CTRL_SWDPIO0                   = 0x00400000 // SWDPIN 0 Input or output
-	CTRL_SWDPIO2                   = 0x01000000 // SWDPIN 2 input or output
-	CTRL_SWDPIO3                   = 0x02000000 // SWDPIN 3 input or output
-	CTRL_DEV_RST                   = 0x20000000 // Device reset
-	CTRL_RST                       = 0x04000000 // Global reset
-	CTRL_RFCE                      = 0x08000000 // Receive Flow Control enable
-	CTRL_TFCE                      = 0x10000000 // Transmit flow control enable
-	CTRL_VME                       = 0x40000000 // IEEE VLAN mode enable
-	CTRL_PHY_RST                   = 0x80000000 // PHY Reset
-	CTRL_I2C_ENA                   = 0x02000000 // I2C enable
+	CTRL_PRIOR              uint32 = 0x00000004 // Priority on PCI. 0=rx,1=fair
+	CTRL_GIO_MASTER_DISABLE uint32 = 0x00000004 //Blocks new Master reqs
+	CTRL_LRST               uint32 = 0x00000008 // Link reset. 0=normal,1=reset
+	CTRL_ASDE               uint32 = 0x00000020 // Auto-speed detect enable
+	CTRL_SLU                uint32 = 0x00000040 // Set link up (Force Link)
+	CTRL_ILOS               uint32 = 0x00000080 // Invert Loss-Of Signal
+	CTRL_SPD_SEL            uint32 = 0x00000300 // Speed Select Mask
+	CTRL_SPD_10             uint32 = 0x00000000 // Force 10Mb
+	CTRL_SPD_100            uint32 = 0x00000100 // Force 100Mb
+	CTRL_SPD_1000           uint32 = 0x00000200 // Force 1Gb
+	CTRL_FRCSPD             uint32 = 0x00000800 // Force Speed
+	CTRL_FRCDPX             uint32 = 0x00001000 // Force Duplex
+	CTRL_LANPHYPC_OVERRIDE  uint32 = 0x00010000 // SW control of LANPHYPC
+	CTRL_LANPHYPC_VALUE     uint32 = 0x00020000 // SW value of LANPHYPC
+	CTRL_MEHE               uint32 = 0x00080000 // Memory Error Handling Enable
+	CTRL_SWDPIN0            uint32 = 0x00040000 // SWDPIN 0 value
+	CTRL_SWDPIN1            uint32 = 0x00080000 // SWDPIN 1 value
+	CTRL_SWDPIN2            uint32 = 0x00100000 // SWDPIN 2 value
+	CTRL_ADVD3WUC           uint32 = 0x00100000 // D3 WUC
+	CTRL_EN_PHY_PWR_MGMT    uint32 = 0x00200000 // PHY PM enable
+	CTRL_SWDPIN3            uint32 = 0x00200000 // SWDPIN 3 value
+	CTRL_SWDPIO0            uint32 = 0x00400000 // SWDPIN 0 Input or output
+	CTRL_SWDPIO2            uint32 = 0x01000000 // SWDPIN 2 input or output
+	CTRL_SWDPIO3            uint32 = 0x02000000 // SWDPIN 3 input or output
+	CTRL_DEV_RST            uint32 = 0x20000000 // Device reset
+	CTRL_RST                uint32 = 0x04000000 // Global reset
+	CTRL_RFCE               uint32 = 0x08000000 // Receive Flow Control enable
+	CTRL_TFCE               uint32 = 0x10000000 // Transmit flow control enable
+	CTRL_VME                uint32 = 0x40000000 // IEEE VLAN mode enable
+	CTRL_PHY_RST            uint32 = 0x80000000 // PHY Reset
+	CTRL_I2C_ENA            uint32 = 0x02000000 // I2C enable
 
 	CTRL_MDIO_DIR = CTRL_SWDPIO2
 	CTRL_MDIO     = CTRL_SWDPIN2
@@ -330,50 +351,50 @@ const (
 // STATUS
 const (
 	STATUS_FD                uint32 = 0x00000001 // Duplex 0=half 1=full
-	STATUS_LU                       = 0x00000002 // Link up.0=no,1=link
-	STATUS_FUNC_MASK                = 0x0000000C // PCI Function Mask
-	STATUS_FUNC_SHIFT               = 2
-	STATUS_FUNC_1                   = 0x00000004 // Function 1
-	STATUS_TXOFF                    = 0x00000010 // transmission paused
-	STATUS_SPEED_MASK               = 0x000000C0
-	STATUS_SPEED_10                 = 0x00000000 // Speed 10Mb/s
-	STATUS_SPEED_100                = 0x00000040 // Speed 100Mb/s
-	STATUS_SPEED_1000               = 0x00000080 // Speed 1000Mb/s
-	STATUS_LAN_INIT_DONE            = 0x00000200 // Lan Init Compltn by NVM
-	STATUS_PHYRA                    = 0x00000400 // PHY Reset Asserted
-	STATUS_GIO_MASTER_ENABLE        = 0x00080000 // Master request status
-	STATUS_PCI66                    = 0x00000800 // In 66Mhz slot
-	STATUS_BUS64                    = 0x00001000 // In 64 bit slot
-	STATUS_2P5_SKU                  = 0x00001000 // Val of 2.5GBE SKU strap
-	STATUS_2P5_SKU_OVER             = 0x00002000 // Val of 2.5GBE SKU Over
-	STATUS_PCIX_MODE                = 0x00002000 // PCI-X mode
-	STATUS_PCIX_SPEED               = 0x0000C000 // PCI-X bus speed
+	STATUS_LU                uint32 = 0x00000002 // Link up.0=no,1=link
+	STATUS_FUNC_MASK         uint32 = 0x0000000C // PCI Function Mask
+	STATUS_FUNC_SHIFT        uint32 = 2
+	STATUS_FUNC_1            uint32 = 0x00000004 // Function 1
+	STATUS_TXOFF             uint32 = 0x00000010 // transmission paused
+	STATUS_SPEED_MASK        uint32 = 0x000000C0
+	STATUS_SPEED_10          uint32 = 0x00000000 // Speed 10Mb/s
+	STATUS_SPEED_100         uint32 = 0x00000040 // Speed 100Mb/s
+	STATUS_SPEED_1000        uint32 = 0x00000080 // Speed 1000Mb/s
+	STATUS_LAN_INIT_DONE     uint32 = 0x00000200 // Lan Init Compltn by NVM
+	STATUS_PHYRA             uint32 = 0x00000400 // PHY Reset Asserted
+	STATUS_GIO_MASTER_ENABLE uint32 = 0x00080000 // Master request status
+	STATUS_PCI66             uint32 = 0x00000800 // In 66Mhz slot
+	STATUS_BUS64             uint32 = 0x00001000 // In 64 bit slot
+	STATUS_2P5_SKU           uint32 = 0x00001000 // Val of 2.5GBE SKU strap
+	STATUS_2P5_SKU_OVER      uint32 = 0x00002000 // Val of 2.5GBE SKU Over
+	STATUS_PCIX_MODE         uint32 = 0x00002000 // PCI-X mode
+	STATUS_PCIX_SPEED        uint32 = 0x0000C000 // PCI-X bus speed
 
 	// Constants used to interpret the masked PCI-X bus speed.
-	STATUS_PCIX_SPEED_66  = 0x00000000 // PCI-X bus spd 50-66MHz
-	STATUS_PCIX_SPEED_100 = 0x00004000 // PCI-X bus spd 66-100MHz
-	STATUS_PCIX_SPEED_133 = 0x00008000 // PCI-X bus spd 100-133MHz
-	STATUS_PCIM_STATE     = 0x40000000 // PCIm function state
+	STATUS_PCIX_SPEED_66  uint32 = 0x00000000 // PCI-X bus spd 50-66MHz
+	STATUS_PCIX_SPEED_100 uint32 = 0x00004000 // PCI-X bus spd 66-100MHz
+	STATUS_PCIX_SPEED_133 uint32 = 0x00008000 // PCI-X bus spd 100-133MHz
+	STATUS_PCIM_STATE     uint32 = 0x40000000 // PCIm function state
 )
 
 // EECD
 const (
 	EECD_SK        uint32 = 0x00000001 // NVM Clock
-	EECD_CS               = 0x00000002 // NVM Chip Select
-	EECD_DI               = 0x00000004 // NVM Data In
-	EECD_DO               = 0x00000008 // NVM Data Out
-	EECD_REQ              = 0x00000040 // NVM Access Request
-	EECD_GNT              = 0x00000080 // NVM Access Grant
-	EECD_PRES             = 0x00000100 // NVM Present
-	EECD_SIZE             = 0x00000200 // NVM Size (0=64 word 1=256 word)
-	EECD_BLOCKED          = 0x00008000 // Bit banging access blocked flag
-	EECD_ABORT            = 0x00010000 // NVM operation aborted flag
-	EECD_TIMEOUT          = 0x00020000 // NVM read operation timeout flag
-	EECD_ERROR_CLR        = 0x00040000 // NVM error status clear bit
+	EECD_CS        uint32 = 0x00000002 // NVM Chip Select
+	EECD_DI        uint32 = 0x00000004 // NVM Data In
+	EECD_DO        uint32 = 0x00000008 // NVM Data Out
+	EECD_REQ       uint32 = 0x00000040 // NVM Access Request
+	EECD_GNT       uint32 = 0x00000080 // NVM Access Grant
+	EECD_PRES      uint32 = 0x00000100 // NVM Present
+	EECD_SIZE      uint32 = 0x00000200 // NVM Size (0=64 word 1=256 word)
+	EECD_BLOCKED   uint32 = 0x00008000 // Bit banging access blocked flag
+	EECD_ABORT     uint32 = 0x00010000 // NVM operation aborted flag
+	EECD_TIMEOUT   uint32 = 0x00020000 // NVM read operation timeout flag
+	EECD_ERROR_CLR uint32 = 0x00040000 // NVM error status clear bit
 
 	// NVM Addressing bits based on type 0=small, 1=large
 	EECD_ADDR_BITS uint32 = 0x00000400
-	EECD_TYPE             = 0x00002000 // NVM Type (1-SPI, 0-Microwire)
+	EECD_TYPE      uint32 = 0x00002000 // NVM Type (1-SPI, 0-Microwire)
 )
 
 // CTRL_EXT
@@ -436,14 +457,31 @@ const (
 	RCTL_SECRC  uint32 = uint32(1) << 26
 )
 
+// TXCW
+const (
+	TXCW_FD         uint32 = 0x00000020 // TXCW full duplex
+	TXCW_PAUSE      uint32 = 0x00000080 // TXCW sym pause request
+	TXCW_ASM_DIR    uint32 = 0x00000100 // TXCW astm pause direction
+	TXCW_PAUSE_MASK uint32 = 0x00000180 // TXCW pause request mask
+	TXCW_ANE        uint32 = 0x80000000 // Auto-neg enable
+)
+
+// RXCW
+const (
+	RXCW_CW    uint32 = 0x0000ffff // RxConfigWord mask
+	RXCW_IV    uint32 = 0x08000000 // Receive config invalid
+	RXCW_C     uint32 = 0x20000000 // Receive config
+	RXCW_SYNCH uint32 = 0x40000000 // Receive config synch
+)
+
 // TCTL
 const (
 	TCTL_EN   uint32 = 0x00000002 // enable Tx
-	TCTL_PSP         = 0x00000008 // pad short packets
-	TCTL_CT          = 0x00000ff0 // collision threshold
-	TCTL_COLD        = 0x003ff000 // collision distance
-	TCTL_RTLC        = 0x01000000 // Re-transmit on late collision
-	TCTL_MULR        = 0x10000000 // Multiple request support
+	TCTL_PSP  uint32 = 0x00000008 // pad short packets
+	TCTL_CT   uint32 = 0x00000ff0 // collision threshold
+	TCTL_COLD uint32 = 0x003ff000 // collision distance
+	TCTL_RTLC uint32 = 0x01000000 // Re-transmit on late collision
+	TCTL_MULR uint32 = 0x10000000 // Multiple request support
 )
 
 // Collision related configuration parameters
@@ -471,8 +509,8 @@ const (
 // Flow Control
 const (
 	FCRTH_RTH  uint32 = 0x0000FFF8 // Mask Bits[15:3] for RTH
-	FCRTL_RTL         = 0x0000FFF8 // Mask Bits[15:3] for RTL
-	FCRTL_XONE        = 0x80000000 // Enable XON frame transmission
+	FCRTL_RTL  uint32 = 0x0000FFF8 // Mask Bits[15:3] for RTL
+	FCRTL_XONE uint32 = 0x80000000 // Enable XON frame transmission
 )
 
 func TXDCTL(n int) int {
@@ -511,6 +549,36 @@ func RAH(n int) int {
 		return 0x054e4 + (n-16)*8
 	}
 }
+
+// PCS_CFG
+const (
+	PCS_CFG_PCS_EN = 8
+)
+
+// PCS_LCTL
+const (
+	PCS_LCTL_FLV_LINK_UP = 1
+	PCS_LCTL_FSV_10      = 0
+	PCS_LCTL_FSV_100     = 2
+	PCS_LCTL_FSV_1000    = 4
+	PCS_LCTL_FDV_FULL    = 8
+	PCS_LCTL_FSD         = 0x10
+	PCS_LCTL_FORCE_LINK  = 0x20
+	PCS_LCTL_FORCE_FCTRL = 0x80
+	PCS_LCTL_AN_ENABLE   = 0x10000
+	PCS_LCTL_AN_RESTART  = 0x20000
+	PCS_LCTL_AN_TIMEOUT  = 0x40000
+)
+
+// PCS_LSTAT
+const (
+	PCS_LSTS_LINK_OK     = 1
+	PCS_LSTS_SPEED_100   = 2
+	PCS_LSTS_SPEED_1000  = 4
+	PCS_LSTS_DUPLEX_FULL = 8
+	PCS_LSTS_SYNK_OK     = 0x10
+	PCS_LSTS_AN_COMPLETE = 0x10000
+)
 
 // MANC
 const (

@@ -52,3 +52,53 @@ type BusInfo struct {
 	Func       uint16
 	PCICmdWord uint16
 }
+
+func GetBusInfoPCI(hw *HW) error {
+	mac := &hw.MAC
+	bus := &hw.Bus
+	status := hw.RegRead(STATUS)
+
+	// PCI or PCI-X?
+	if status&STATUS_PCIX_MODE != 0 {
+		bus.Type = BusTypePCIX
+	} else {
+		bus.Type = BusTypePCI
+	}
+
+	// Bus speed
+	if bus.Type == BusTypePCI {
+		if status&STATUS_PCI66 != 0 {
+			bus.Speed = BusSpeed66
+		} else {
+			bus.Speed = BusSpeed33
+		}
+	} else {
+		switch status & STATUS_PCIX_SPEED {
+		case STATUS_PCIX_SPEED_66:
+			bus.Speed = BusSpeed66
+		case STATUS_PCIX_SPEED_100:
+			bus.Speed = BusSpeed100
+		case STATUS_PCIX_SPEED_133:
+			bus.Speed = BusSpeed133
+		default:
+			bus.Speed = BusSpeedReserved
+		}
+	}
+
+	// Bus width
+	if status&STATUS_BUS64 != 0 {
+		bus.Width = BusWidth64
+	} else {
+		bus.Width = BusWidth32
+	}
+
+	// Which PCI(-X) function?
+	mac.Op.SetLANID()
+
+	return nil
+}
+
+func SetLANIDMultiPortPCI(hw *HW) {
+	bus := &hw.Bus
+	bus.Func = 0
+}

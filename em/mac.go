@@ -20,30 +20,6 @@ const (
 	ALT_MAC_ADDRESS_OFFSET_LAN3
 )
 
-// VLAN Filter Table (4096 bits)
-const VLAN_FILTER_TBL_SIZE = 128
-
-// Word definitions for ID LED Settings
-const (
-	ID_LED_RESERVED_0000 = 0x0000
-	ID_LED_RESERVED_FFFF = 0xFFFF
-
-	ID_LED_DEF1_DEF2 = 0x1
-	ID_LED_DEF1_ON2  = 0x2
-	ID_LED_DEF1_OFF2 = 0x3
-	ID_LED_ON1_DEF2  = 0x4
-	ID_LED_ON1_ON2   = 0x5
-	ID_LED_ON1_OFF2  = 0x6
-	ID_LED_OFF1_DEF2 = 0x7
-	ID_LED_OFF1_ON2  = 0x8
-	ID_LED_OFF1_OFF2 = 0x9
-
-	ID_LED_DEFAULT = (ID_LED_OFF1_ON2 << 12) |
-		(ID_LED_OFF1_OFF2 << 8) |
-		(ID_LED_DEF1_DEF2 << 4) |
-		ID_LED_DEF1_DEF2
-)
-
 const RAR_ENTRIES = 15
 const RAH_AV = 0x80000000 // Receive descriptor valid
 
@@ -155,46 +131,6 @@ type MACOp interface {
 	ReleaseSWFWSync(uint16)
 }
 
-// s32 e1000_id_led_init_generic(struct e1000_hw *hw)
-func IDLEDInit(hw *HW) error {
-	mac := &hw.MAC
-
-	x, err := hw.NVM.Op.ValidLEDDefault()
-	if err != nil {
-		return err
-	}
-
-	mac.LEDCtlDefault = hw.RegRead(LEDCTL)
-	mac.LEDCtlMode1 = mac.LEDCtlDefault
-	mac.LEDCtlMode2 = mac.LEDCtlDefault
-
-	ledmask := uint16(0x0f)
-	ledctlmask := uint32(0xff)
-	ledctlon := LEDCTL_MODE_LED_ON
-	ledctloff := LEDCTL_MODE_LED_OFF
-	for i := 0; i < 4; i++ {
-		t := (x >> (i << 2)) & ledmask
-		switch t {
-		case ID_LED_ON1_DEF2, ID_LED_ON1_ON2, ID_LED_ON1_OFF2:
-			mac.LEDCtlMode1 &^= ledctlmask << (i << 3)
-			mac.LEDCtlMode1 |= ledctlon << (i << 3)
-		case ID_LED_OFF1_DEF2, ID_LED_OFF1_ON2, ID_LED_OFF1_OFF2:
-			mac.LEDCtlMode1 &^= ledctlmask << (i << 3)
-			mac.LEDCtlMode1 |= ledctloff << (i << 3)
-		}
-		switch t {
-		case ID_LED_DEF1_ON2, ID_LED_ON1_ON2, ID_LED_OFF1_ON2:
-			mac.LEDCtlMode2 &^= ledctlmask << (i << 3)
-			mac.LEDCtlMode2 |= ledctlon << (i << 3)
-		case ID_LED_DEF1_OFF2, ID_LED_ON1_OFF2, ID_LED_OFF1_OFF2:
-			mac.LEDCtlMode2 &^= ledctlmask << (i << 3)
-			mac.LEDCtlMode2 |= ledctloff << (i << 3)
-		}
-	}
-
-	return nil
-}
-
 // void e1000_clear_hw_cntrs_base_generic(struct e1000_hw *hw)
 func ClearHWCounters(hw *HW) {
 	hw.RegRead(CRCERRS)
@@ -234,90 +170,6 @@ func ClearHWCounters(hw *HW) {
 	hw.RegRead(TPT)
 	hw.RegRead(MPTC)
 	hw.RegRead(BPTC)
-}
-
-// s32 e1000_valid_led_default_generic(struct e1000_hw *hw, u16 *data)
-func ValidLEDDefault(hw *HW) (uint16, error) {
-	nvm := &hw.NVM
-
-	var x [1]uint16
-	err := nvm.Op.Read(NVM_ID_LED_SETTINGS, x[:])
-	if err != nil {
-		return 0, nil
-	}
-
-	if x[0] == uint16(0) || x[0] == ^uint16(0) {
-		return ID_LED_DEFAULT, nil
-	}
-
-	return x[0], nil
-}
-
-func CleanupLED(hw *HW) error {
-	hw.RegWrite(LEDCTL, hw.MAC.LEDCtlDefault)
-	return nil
-}
-
-func ClearVFTA(hw *HW) {
-	for offset := 0; offset < VLAN_FILTER_TBL_SIZE; offset++ {
-		hw.RegWrite(VFTA+(offset<<2), 0)
-		hw.RegWriteFlush()
-	}
-}
-
-func GetBusInfoPCI(hw *HW) error {
-	mac := &hw.MAC
-	bus := &hw.Bus
-	status := hw.RegRead(STATUS)
-
-	// PCI or PCI-X?
-	if status&STATUS_PCIX_MODE != 0 {
-		bus.Type = BusTypePCIX
-	} else {
-		bus.Type = BusTypePCI
-	}
-
-	// Bus speed
-	if bus.Type == BusTypePCI {
-		if status&STATUS_PCI66 != 0 {
-			bus.Speed = BusSpeed66
-		} else {
-			bus.Speed = BusSpeed33
-		}
-	} else {
-		switch status & STATUS_PCIX_SPEED {
-		case STATUS_PCIX_SPEED_66:
-			bus.Speed = BusSpeed66
-		case STATUS_PCIX_SPEED_100:
-			bus.Speed = BusSpeed100
-		case STATUS_PCIX_SPEED_133:
-			bus.Speed = BusSpeed133
-		default:
-			bus.Speed = BusSpeedReserved
-		}
-	}
-
-	// Bus width
-	if status&STATUS_BUS64 != 0 {
-		bus.Width = BusWidth64
-	} else {
-		bus.Width = BusWidth32
-	}
-
-	// Which PCI(-X) function?
-	mac.Op.SetLANID()
-
-	return nil
-}
-
-func SetLANIDMultiPortPCI(hw *HW) {
-	bus := &hw.Bus
-	bus.Func = 0
-}
-
-func WriteVFTA(hw *HW, offset, val uint32) {
-	hw.RegWrite(VFTA+int(offset<<2), val)
-	hw.RegWriteFlush()
 }
 
 func SetRAR(hw *HW, addr [6]byte, index int) error {
@@ -360,47 +212,6 @@ func ConfigCollisionDist(hw *HW) {
 	tctl |= COLLISION_DISTANCE << COLD_SHIFT
 	hw.RegWrite(TCTL, tctl)
 	hw.RegWriteFlush()
-}
-
-func LEDOn(hw *HW) error {
-	switch hw.PHY.MediaType {
-	case MediaTypeFiber:
-		ctrl := hw.RegRead(CTRL)
-		ctrl &^= CTRL_SWDPIN0
-		ctrl |= CTRL_SWDPIO0
-		hw.RegWrite(CTRL, ctrl)
-	case MediaTypeCopper:
-		hw.RegWrite(LEDCTL, hw.MAC.LEDCtlMode2)
-	}
-	return nil
-}
-
-func LEDOff(hw *HW) error {
-	switch hw.PHY.MediaType {
-	case MediaTypeFiber:
-		ctrl := hw.RegRead(CTRL)
-		ctrl |= CTRL_SWDPIN0
-		ctrl |= CTRL_SWDPIO0
-		hw.RegWrite(CTRL, ctrl)
-	case MediaTypeCopper:
-		hw.RegWrite(LEDCTL, hw.MAC.LEDCtlMode1)
-	}
-	return nil
-}
-
-func SetupLED(hw *HW) error {
-	switch hw.PHY.MediaType {
-	case MediaTypeFiber:
-		ledctl := hw.RegRead(LEDCTL)
-		hw.MAC.LEDCtlDefault = ledctl
-		// Turn off LED0
-		ledctl &^= LEDCTL_LED0_IVRT | LEDCTL_LED0_BLINK | LEDCTL_LED0_MODE_MASK
-		ledctl |= LEDCTL_MODE_LED_OFF << LEDCTL_LED0_MODE_SHIFT
-		hw.RegWrite(LEDCTL, ledctl)
-	case MediaTypeCopper:
-		hw.RegWrite(LEDCTL, hw.MAC.LEDCtlMode1)
-	}
-	return nil
 }
 
 func SetupLink(hw *HW) error {
@@ -492,14 +303,176 @@ func HashMCAddr(hw *HW, addr [6]byte) uint32 {
 }
 
 func CheckForCopperLink(hw *HW) error {
-	return nil
+	mac := &hw.MAC
+
+	// We only want to go out to the PHY registers to see if Auto-Neg
+	// has completed and/or if our link status has changed.  The
+	// get_link_status flag is set upon receiving a Link Status
+	// Change or Rx Sequence Error interrupt.
+	if !mac.GetLinkStatus {
+		return nil
+	}
+
+	// First we want to see if the MII Status Register reports
+	// link.  If so, then we want to get the current speed/duplex
+	// of the PHY.
+	link, err := PHYHasLink(hw, 1, 0)
+	if err != nil {
+		return err
+	}
+	if !link {
+		// No link detected
+		return nil
+	}
+
+	mac.GetLinkStatus = false
+
+	// Check if there was DownShift, must be checked
+	// immediately after link-up
+	CheckDownshift(hw)
+
+	// If we are forcing speed/duplex, then we simply return since
+	// we have already determined whether we have link or not.
+	if !mac.Autoneg {
+		return errors.New("illegal config")
+	}
+
+	// Auto-Neg is enabled.  Auto Speed Detection takes care
+	// of MAC speed/duplex configuration.  So we only need to
+	// configure Collision Distance in the MAC.
+	mac.Op.ConfigCollisionDist()
+
+	// Configure Flow Control now that Auto-Neg has completed.
+	// First, we need to restore the desired flow control
+	// settings because we may have had to re-autoneg with a
+	// different link partner.
+	return ConfigFCAfterLinkUp(hw)
 }
 
 func CheckForFiberLink(hw *HW) error {
+	mac := &hw.MAC
+
+	ctrl := hw.RegRead(CTRL)
+	status := hw.RegRead(STATUS)
+	rxcw := hw.RegRead(RXCW)
+
+	// If we don't have link (auto-negotiation failed or link partner
+	// cannot auto-negotiate), the cable is plugged in (we have signal),
+	// and our link partner is not trying to auto-negotiate with us (we
+	// are receiving idles or data), we need to force link up. We also
+	// need to give auto-negotiation time to complete, in case the cable
+	// was just plugged in. The autoneg_failed flag does this.
+	// (ctrl & E1000_CTRL_SWDPIN1) == 1 == have signal
+	if ctrl&CTRL_SWDPIN1 != 0 && status&STATUS_LU == 0 && rxcw&RXCW_C == 0 {
+		if !mac.AutonegFailed {
+			mac.AutonegFailed = true
+			return nil
+		}
+
+		// Disable auto-negotiation in the TXCW register
+		hw.RegWrite(TXCW, mac.TxCW & ^TXCW_ANE)
+
+		// Force link-up and also force full-duplex.
+		ctrl = hw.RegRead(CTRL)
+		ctrl |= CTRL_SLU | CTRL_FD
+		hw.RegWrite(CTRL, ctrl)
+
+		// Configure Flow Control after forcing link up. */
+		err := ConfigFCAfterLinkUp(hw)
+		if err != nil {
+			return err
+		}
+	} else if ctrl&CTRL_SLU != 0 && rxcw&RXCW_C != 0 {
+		// If we are forcing link and we are receiving /C/ ordered
+		// sets, re-enable auto-negotiation in the TXCW register
+		// and disable forced link in the Device Control register
+		// in an attempt to auto-negotiate with our link partner.
+		hw.RegWrite(TXCW, mac.TxCW)
+		hw.RegWrite(CTRL, ctrl & ^CTRL_SLU)
+
+		mac.SerdesHasLink = true
+	}
+
 	return nil
 }
 
 func CheckForSerdesLink(hw *HW) error {
+	mac := &hw.MAC
+
+	ctrl := hw.RegRead(CTRL)
+	status := hw.RegRead(STATUS)
+	rxcw := hw.RegRead(RXCW)
+
+	// If we don't have link (auto-negotiation failed or link partner
+	// cannot auto-negotiate), and our link partner is not trying to
+	// auto-negotiate with us (we are receiving idles or data),
+	// we need to force link up. We also need to give auto-negotiation
+	// time to complete.
+	// (ctrl & E1000_CTRL_SWDPIN1) == 1 == have signal
+	if status&STATUS_LU == 0 && rxcw&RXCW_C == 0 {
+		if !mac.AutonegFailed {
+			mac.AutonegFailed = true
+			return nil
+		}
+
+		// Disable auto-negotiation in the TXCW register
+		hw.RegWrite(TXCW, mac.TxCW & ^TXCW_ANE)
+
+		// Force link-up and also force full-duplex.
+		ctrl = hw.RegRead(CTRL)
+		ctrl |= CTRL_SLU | CTRL_FD
+		hw.RegWrite(CTRL, ctrl)
+
+		// Configure Flow Control after forcing link up.
+		err := ConfigFCAfterLinkUp(hw)
+		if err != nil {
+			return err
+		}
+	} else if ctrl&CTRL_SLU != 0 && rxcw&RXCW_C != 0 {
+		// If we are forcing link and we are receiving /C/ ordered
+		// sets, re-enable auto-negotiation in the TXCW register
+		// and disable forced link in the Device Control register
+		// in an attempt to auto-negotiate with our link partner.
+		hw.RegWrite(TXCW, mac.TxCW)
+		hw.RegWrite(CTRL, ctrl & ^CTRL_SLU)
+
+		mac.SerdesHasLink = true
+	} else if hw.RegRead(TXCW)&TXCW_ANE == 0 {
+		// If we force link for non-auto-negotiation switch, check
+		// link status based on MAC synchronization for internal
+		// serdes media type.
+		// SYNCH bit and IV bit are sticky.
+		// usec_delay(10)
+		rxcw := hw.RegRead(RXCW)
+		if rxcw&RXCW_SYNCH != 0 {
+			if rxcw&RXCW_IV == 0 {
+				mac.SerdesHasLink = true
+			}
+		} else {
+			mac.SerdesHasLink = false
+		}
+	}
+
+	if hw.RegRead(TXCW)&TXCW_ANE != 0 {
+		status = hw.RegRead(STATUS)
+		if status&STATUS_LU != 0 {
+			// SYNCH bit and IV bit are sticky, so reread rxcw.
+			// usec_delay(10)
+			rxcw := hw.RegRead(RXCW)
+			if rxcw&RXCW_SYNCH != 0 {
+				if rxcw&RXCW_IV == 0 {
+					mac.SerdesHasLink = true
+				} else {
+					mac.SerdesHasLink = false
+				}
+			} else {
+				mac.SerdesHasLink = false
+			}
+		} else {
+			mac.SerdesHasLink = false
+		}
+	}
+
 	return nil
 }
 

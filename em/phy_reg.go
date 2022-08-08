@@ -56,6 +56,62 @@ const (
 	MII_SR_100T4_CAPS        = 0x8000 // 100T4 Capable
 )
 
+// Autoneg Advertisement Register
+const (
+	NWAY_AR_SELECTOR_FIELD = 0x0001 // indicates IEEE 802.3 CSMA/CD
+	NWAY_AR_10T_HD_CAPS    = 0x0020 // 10T   Half Duplex Capable
+	NWAY_AR_10T_FD_CAPS    = 0x0040 // 10T   Full Duplex Capable
+	NWAY_AR_100TX_HD_CAPS  = 0x0080 // 100TX Half Duplex Capable
+	NWAY_AR_100TX_FD_CAPS  = 0x0100 // 100TX Full Duplex Capable
+	NWAY_AR_100T4_CAPS     = 0x0200 // 100T4 Capable
+	NWAY_AR_PAUSE          = 0x0400 // Pause operation desired
+	NWAY_AR_ASM_DIR        = 0x0800 // Asymmetric Pause Direction bit
+	NWAY_AR_REMOTE_FAULT   = 0x2000 // Remote Fault detected
+	NWAY_AR_NEXT_PAGE      = 0x8000 // Next Page ability supported
+)
+
+// Link Partner Ability Register (Base Page)
+const (
+	NWAY_LPAR_SELECTOR_FIELD = 0x0000 // LP protocol selector field
+	NWAY_LPAR_10T_HD_CAPS    = 0x0020 // LP 10T Half Dplx Capable
+	NWAY_LPAR_10T_FD_CAPS    = 0x0040 // LP 10T Full Dplx Capable
+	NWAY_LPAR_100TX_HD_CAPS  = 0x0080 // LP 100TX Half Dplx Capable
+	NWAY_LPAR_100TX_FD_CAPS  = 0x0100 // LP 100TX Full Dplx Capable
+	NWAY_LPAR_100T4_CAPS     = 0x0200 // LP is 100T4 Capable
+	NWAY_LPAR_PAUSE          = 0x0400 // LP Pause operation desired
+	NWAY_LPAR_ASM_DIR        = 0x0800 // LP Asym Pause Direction bit
+	NWAY_LPAR_REMOTE_FAULT   = 0x2000 // LP detected Remote Fault
+	NWAY_LPAR_ACKNOWLEDGE    = 0x4000 // LP rx'd link code word
+	NWAY_LPAR_NEXT_PAGE      = 0x8000 // Next Page ability supported
+)
+
+// Autoneg Expansion Register
+const (
+	NWAY_ER_LP_NWAY_CAPS      = 0x0001 // LP has Auto Neg Capability
+	NWAY_ER_PAGE_RXD          = 0x0002 // LP 10T Half Dplx Capable
+	NWAY_ER_NEXT_PAGE_CAPS    = 0x0004 // LP 10T Full Dplx Capable
+	NWAY_ER_LP_NEXT_PAGE_CAPS = 0x0008 // LP 100TX Half Dplx Capable
+	NWAY_ER_PAR_DETECT_FAULT  = 0x0010 // LP 100TX Full Dplx Capable
+)
+
+// 1000BASE-T Control Register
+const (
+	CR_1000T_ASYM_PAUSE = 0x0080 // Advertise asymmetric pause bit
+	CR_1000T_HD_CAPS    = 0x0100 // Advertise 1000T HD capability
+	CR_1000T_FD_CAPS    = 0x0200 // Advertise 1000T FD capability
+	// 1=Repeater/switch device port 0=DTE device
+	CR_1000T_REPEATER_DTE = 0x0400
+	// 1=Configure PHY as Master 0=Configure PHY as Slave
+	CR_1000T_MS_VALUE = 0x0800
+	// 1=Master/Slave manual config value 0=Automatic Master/Slave config
+	CR_1000T_MS_ENABLE        = 0x1000
+	CR_1000T_TEST_MODE_NORMAL = 0x0000 // Normal Operation
+	CR_1000T_TEST_MODE_1      = 0x2000 // Transmit Waveform test
+	CR_1000T_TEST_MODE_2      = 0x4000 // Master Transmit Jitter test
+	CR_1000T_TEST_MODE_3      = 0x6000 // Slave Transmit Jitter test
+	CR_1000T_TEST_MODE_4      = 0x8000 // Transmitter Distortion test
+)
+
 // 1000BASE-T Status Register
 const (
 	SR_1000T_IDLE_ERROR_CNT   = 0x00FF // Num idle err since last rd

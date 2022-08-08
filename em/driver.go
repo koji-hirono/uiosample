@@ -118,7 +118,7 @@ func (d *Driver) Start() error {
 	// eth_em_tx_init(dev)
 	// eth_em_rx_init(dev)
 
-	// e1000_clear_hw_cntrs_base_generic(hw)
+	ClearHWCounters(d.HW)
 
 	// VLANのオフロードを設定する。
 
