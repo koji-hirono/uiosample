@@ -2,26 +2,26 @@ package em
 
 const (
 	PBA_8K  uint32 = 0x0008
-	PBA_10K        = 0x000a
-	PBA_12K        = 0x000c
-	PBA_14K        = 0x000e
-	PBA_16K        = 0x0010
-	PBA_18K        = 0x0012
-	PBA_20K        = 0x0014
-	PBA_22K        = 0x0016
-	PBA_24K        = 0x0018
-	PBA_26K        = 0x001a
-	PBA_30K        = 0x001e
-	PBA_32K        = 0x0020
-	PBA_34K        = 0x0022
-	PBA_35K        = 0x0023
-	PBA_38K        = 0x0026
-	PBA_40K        = 0x0028
-	PBA_48K        = 0x0030
-	PBA_64K        = 0x0040
+	PBA_10K uint32 = 0x000a
+	PBA_12K uint32 = 0x000c
+	PBA_14K uint32 = 0x000e
+	PBA_16K uint32 = 0x0010
+	PBA_18K uint32 = 0x0012
+	PBA_20K uint32 = 0x0014
+	PBA_22K uint32 = 0x0016
+	PBA_24K uint32 = 0x0018
+	PBA_26K uint32 = 0x001a
+	PBA_30K uint32 = 0x001e
+	PBA_32K uint32 = 0x0020
+	PBA_34K uint32 = 0x0022
+	PBA_35K uint32 = 0x0023
+	PBA_38K uint32 = 0x0026
+	PBA_40K uint32 = 0x0028
+	PBA_48K uint32 = 0x0030
+	PBA_64K uint32 = 0x0040
 )
 
-func (hw *HW) SetPBA() {
+func SetPBA(hw *HW) {
 	var pba uint32
 	switch hw.MAC.Type {
 	case MACType82547, MACType82547Rev2:

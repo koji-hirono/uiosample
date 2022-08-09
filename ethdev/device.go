@@ -11,7 +11,7 @@ type DeviceInfo struct {
 	RxOffloadCap      RxOffloadCap
 	TxOffloadCap      TxOffloadCap
 	RxQueueOffloadCap RxOffloadCap
-	TxQueueOffloadCap RxOffloadCap
+	TxQueueOffloadCap TxOffloadCap
 	RxConfig          RxConfig
 	TxConfig          TxConfig
 	LinkSpeedCap      LinkSpeedCap

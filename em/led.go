@@ -21,6 +21,22 @@ const (
 		ID_LED_DEF1_DEF2
 )
 
+type LED struct {
+	mac *MACInfo
+}
+
+func NewLED(mac *MACInfo) *LED {
+	return &LED{mac: mac}
+}
+
+func (l *LED) On() error {
+	return l.mac.Op.LEDOn()
+}
+
+func (l *LED) Off() error {
+	return l.mac.Op.LEDOff()
+}
+
 func SetupLED(hw *HW) error {
 	switch hw.PHY.MediaType {
 	case MediaTypeFiber:

@@ -4,7 +4,8 @@ type LinkSpeedCap uint32
 
 const (
 	LinkSpeedCapAutoneg LinkSpeedCap = 0
-	LinkSpeedCap10MHalf LinkSpeedCap = 1 << iota
+	LinkSpeedCapFixed   LinkSpeedCap = 1 << iota
+	LinkSpeedCap10MHalf
 	LinkSpeedCap10M
 	LinkSpeedCap100MHalf
 	LinkSpeedCap100M

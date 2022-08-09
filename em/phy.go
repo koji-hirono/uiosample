@@ -221,7 +221,7 @@ type PHYInfo struct {
 }
 
 type PHYOp interface {
-	InitParam() error
+	InitParams() error
 	Acquire() error
 	CfgOnLinkUp() error
 	CheckPolarity() error

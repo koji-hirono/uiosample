@@ -53,7 +53,7 @@ type MACInfo struct {
 	MTAShadow     [128]uint32
 	RAREntryCount uint16
 
-	ForcedSpeedduplex uint8
+	ForcedSpeedDuplex uint16
 
 	AdaptiveIFS        bool
 	HasFWSM            bool

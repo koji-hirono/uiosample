@@ -16,7 +16,7 @@ func NewPHY(hw *em.HW) *PHY {
 	return p
 }
 
-func (p *PHY) InitParam() error {
+func (p *PHY) InitParams() error {
 	phy := &p.hw.PHY
 
 	phy.Addr = 1

@@ -121,83 +121,7 @@ func NewHW(id DeviceID, bar0 pci.Resource, bar1 pci.Resource) (*HW, error) {
 	hw.BAR0 = bar0
 	hw.BAR1 = bar1
 	hw.MAC.Type = MACTypeGet(id)
-	hw.setupInitFuncs(true)
-	hw.init()
 	return hw, nil
-}
-
-// e1000_setup_init_funcs
-func (hw *HW) setupInitFuncs(initdev bool) {
-	// e1000_init_mac_ops_generic(hw)
-	// e1000_init_phy_ops_generic(hw)
-	// e1000_init_nvm_ops_generic(hw)
-	// e1000_init_mbx_ops_generic(hw)
-
-	// hw->mac.typeによって初期化関数を呼ぶ
-
-	if initdev {
-		// e1000_init_mac_params(hw)
-		// e1000_init_nvm_params(hw)
-		// e1000_init_phy_params(hw)
-		// e1000_init_mbx_params(hw)
-	}
-}
-
-// int em_hw_init(struct e1000_hw *hw)
-func (hw *HW) init() {
-	// e1000_init_mac_params(hw)
-	// e1000_init_nvm_params(hw)
-	// e1000_init_phy_params(hw)
-
-	// e1000_get_bus_info(hw)
-
-	hw.MAC.Autoneg = true
-	hw.PHY.AutonegWaitToComplete = false
-	hw.PHY.AutonegAdvertised = ALL_SPEED_DUPLEX
-
-	// e1000_init_script_state_82541(hw, TRUE)
-	// e1000_set_tbi_compatibility_82543(hw, TRUE)
-
-	if hw.PHY.MediaType == MediaTypeCopper {
-		hw.PHY.MDIX = 0
-		hw.PHY.DisablePolarityCorrection = false
-		hw.PHY.MSType = MSTypeHwDefault
-	}
-
-	hw.ResetHW()
-
-	// e1000_validate_nvm_checksum(hw)
-
-	// e1000_read_mac_addr(hw)
-
-	hw.MAC.GetLinkStatus = true
-
-	// e1000_check_reset_block(hw)
-}
-
-func (hw *HW) SetupLink() {
-	// hw->mac.ops.setup_link(hw)
-}
-
-func (hw *HW) SetRAR(mac [6]byte, index int) {
-	// hw->mac.ops.rar_set(hw, addr, index)
-}
-
-func (hw *HW) ResetHW() {
-	// hw->mac.ops.reset_hw(hw)
-}
-
-func (hw *HW) PowerUpPHY() {
-	// hw->phy.ops.power_up(hw)
-	hw.SetupLink()
-}
-
-func (hw *HW) PowerDownPHY() {
-	// hw->phy.ops.power_down(hw)
-}
-
-func (hw *HW) ResetPHY() {
-	// hw->phy.ops.reset(hw)
 }
 
 func (hw *HW) RegRead(reg int) uint32 {
@@ -214,4 +138,34 @@ func (hw *HW) RegMaskWrite(reg int, val, mask uint32) {
 
 func (hw *HW) RegWriteFlush() {
 	hw.RegRead(STATUS)
+}
+
+// e1000_setup_init_funcs
+func SetupInitFuncs(hw *HW, initdev bool) error {
+	// e1000_init_mac_ops_generic(hw)
+	// e1000_init_phy_ops_generic(hw)
+	// e1000_init_nvm_ops_generic(hw)
+	// e1000_init_mbx_ops_generic(hw)
+
+	// hw->mac.typeによって初期化関数を呼ぶ
+
+	if initdev {
+		err := hw.MAC.Op.InitParams()
+		if err != nil {
+			return err
+		}
+		err = hw.NVM.Op.InitParams()
+		if err != nil {
+			return err
+		}
+		err = hw.PHY.Op.InitParams()
+		if err != nil {
+			return err
+		}
+		err = hw.MBX.Op.InitParams()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

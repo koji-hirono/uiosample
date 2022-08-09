@@ -303,8 +303,20 @@ const (
 	// Management Control - RW
 	MANC = 0x5820
 
+	// Management Control To Host - RW
+	MANC2H = 0x5860
+
 	// 3GIO Control Register
 	GCR = 0x5b00
+
+	// Function Active and Power State to MNG
+	FACTPS = 0x5b30
+
+	// SW Semaphore
+	SWSM = 0x5b50
+
+	// FW Semaphore
+	FWSM = 0x5b54
 )
 
 // CTRL
@@ -399,8 +411,39 @@ const (
 
 // CTRL_EXT
 const (
-	CTRL_EXT_EE_RST uint32 = uint32(1) << 15
-	CTRL_EXT_RO_DIS uint32 = uint32(1) << 17
+	CTRL_EXT_LPCD      uint32 = 0x00000004 // LCD Power Cycle Done
+	CTRL_EXT_SDP4_DATA uint32 = 0x00000010 // SW Definable Pin 4 data
+	CTRL_EXT_SDP6_DATA uint32 = 0x00000040 // SW Definable Pin 6 data
+	CTRL_EXT_SDP3_DATA uint32 = 0x00000080 // SW Definable Pin 3 data
+
+	// SDP 4/5 (bits 8,9) are reserved in >= 82575
+
+	CTRL_EXT_SDP4_DIR       uint32 = 0x00000100 // Direction of SDP4 0=in 1=out
+	CTRL_EXT_SDP6_DIR       uint32 = 0x00000400 // Direction of SDP6 0=in 1=out
+	CTRL_EXT_SDP3_DIR       uint32 = 0x00000800 // Direction of SDP3 0=in 1=out
+	CTRL_EXT_FORCE_SMBUS    uint32 = 0x00000800 // Force SMBus mode
+	CTRL_EXT_EE_RST         uint32 = 0x00002000 // Reinitialize from EEPROM
+	CTRL_EXT_PFRSTD         uint32 = 0x00004000 // Physical Func Reset Done Indication
+	CTRL_EXT_SDLPE          uint32 = 0x00040000 // SerDes Low Power Enable
+	CTRL_EXT_SPD_BYPS       uint32 = 0x00008000 // Speed Select Bypass
+	CTRL_EXT_RO_DIS         uint32 = 0x00020000 // Relaxed Ordering disable
+	CTRL_EXT_DMA_DYN_CLK_EN uint32 = 0x00080000 // DMA Dynamic Clk Gating
+	CTRL_EXT_LINK_MODE_MASK uint32 = 0x00c00000
+
+	// Offset of the link mode field in Ctrl Ext register
+	CTRL_EXT_LINK_MODE_OFFSET = 22
+
+	CTRL_EXT_LINK_MODE_1000BASE_KX uint32 = 0x00400000
+	CTRL_EXT_LINK_MODE_GMII        uint32 = 0x00000000
+	CTRL_EXT_LINK_MODE_PCIE_SERDES uint32 = 0x00C00000
+	CTRL_EXT_LINK_MODE_SGMII       uint32 = 0x00800000
+	CTRL_EXT_EIAME                 uint32 = 0x01000000
+	CTRL_EXT_IRCA                  uint32 = 0x00000001
+	CTRL_EXT_DRV_LOAD              uint32 = 0x10000000 // Drv loaded bit for FW
+	CTRL_EXT_IAME                  uint32 = 0x08000000 // Int ACK Auto-mask
+	CTRL_EXT_PBA_CLR               uint32 = 0x80000000 // PBA Clear
+	CTRL_EXT_LSECCK                uint32 = 0x00001000
+	CTRL_EXT_PHYPDEN               uint32 = 0x00100000
 )
 
 // MDIC
@@ -582,7 +625,39 @@ const (
 
 // MANC
 const (
-	MANC_SMBUS_EN uint32 = uint32(1) << 0
-	MANC_ASF_EN   uint32 = uint32(1) << 1
-	MANC_ARP_EN   uint32 = uint32(1) << 13
+	MANC_SMBUS_EN           uint32 = 0x00000001 // SMBus Enabled - RO
+	MANC_ASF_EN             uint32 = 0x00000002 // ASF Enabled - RO
+	MANC_ARP_EN             uint32 = 0x00002000 // Enable ARP Request Filtering
+	MANC_RCV_TCO_EN         uint32 = 0x00020000 // Receive TCO Packets Enabled
+	MANC_BLK_PHY_RST_ON_IDE uint32 = 0x00040000 // Block phy resets
+	MANC_EN_MAC_ADDR_FILTER uint32 = 0x00100000 // Enable MAC address filtering
+	MANC_EN_MNG2HOST        uint32 = 0x00200000 // Enable MNG packets to host memory
+)
+
+// MANC2H
+const (
+	MANC2H_PORT_623 uint32 = 0x00000020 // Port 0x26f
+	MANC2H_PORT_664 uint32 = 0x00000040 // Port 0x298
+)
+
+// FACTPS
+const (
+	FACTPS_MNGCG uint32 = 0x20000000
+)
+
+// SWSM
+const (
+	SWSM_SMBI     uint32 = 0x00000001 // Driver Semaphore bit
+	SWSM_SWESMBI  uint32 = 0x00000002 // FW Semaphore bit
+	SWSM_DRV_LOAD uint32 = 0x00000008 // Driver Loaded Bit
+)
+
+// FWSM
+const (
+	FWSM_MODE_MASK uint32 = 0xe
+
+	FWSM_MODE_SHIFT = 1
+
+	FWSM_FW_VALID        uint32 = 0x00008000
+	FWSM_HI_EN_ONLY_MODE uint32 = 0x4
 )
