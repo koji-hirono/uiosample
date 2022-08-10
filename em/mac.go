@@ -2,6 +2,7 @@ package em
 
 import (
 	"errors"
+	"time"
 )
 
 type SerdesLinkState int
@@ -442,7 +443,7 @@ func CheckForSerdesLink(hw *HW) error {
 		// link status based on MAC synchronization for internal
 		// serdes media type.
 		// SYNCH bit and IV bit are sticky.
-		// usec_delay(10)
+		time.Sleep(10 * time.Microsecond)
 		rxcw := hw.RegRead(RXCW)
 		if rxcw&RXCW_SYNCH != 0 {
 			if rxcw&RXCW_IV == 0 {
@@ -457,7 +458,7 @@ func CheckForSerdesLink(hw *HW) error {
 		status = hw.RegRead(STATUS)
 		if status&STATUS_LU != 0 {
 			// SYNCH bit and IV bit are sticky, so reread rxcw.
-			// usec_delay(10)
+			time.Sleep(10 * time.Microsecond)
 			rxcw := hw.RegRead(RXCW)
 			if rxcw&RXCW_SYNCH != 0 {
 				if rxcw&RXCW_IV == 0 {

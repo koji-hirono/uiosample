@@ -2,6 +2,7 @@ package em
 
 import (
 	"errors"
+	"time"
 )
 
 // PHY ID
@@ -200,7 +201,7 @@ type PHYInfo struct {
 
 	Addr         uint32
 	ID           uint32
-	ResetDelayUS uint32
+	ResetDelayUS time.Duration
 	Revision     uint32
 
 	MediaType MediaType
@@ -285,7 +286,7 @@ func GetPHYID(hw *HW) error {
 		}
 		phy.ID = uint32(id1) << 16
 
-		// usec_delay(20)
+		time.Sleep(20 * time.Microsecond)
 
 		id2, err := phy.Op.ReadReg(PHY_ID2)
 		if err != nil {
@@ -302,7 +303,7 @@ func GetPHYID(hw *HW) error {
 }
 
 func GetCfgDone(hw *HW) error {
-	// msec_delay_irq(10)
+	time.Sleep(10 * time.Millisecond)
 	return nil
 }
 
@@ -320,7 +321,7 @@ func PHYSWReset(hw *HW) error {
 		return err
 	}
 
-	// usec_delay(1)
+	time.Sleep(1 * time.Microsecond)
 	return nil
 }
 
@@ -341,17 +342,17 @@ func PHYHWReset(hw *HW) error {
 	hw.RegWrite(CTRL, ctrl|CTRL_PHY_RST)
 	hw.RegWriteFlush()
 
-	// usec_delay(phy.ResetDelayUS)
+	time.Sleep(phy.ResetDelayUS * time.Microsecond)
 
 	hw.RegWrite(CTRL, ctrl)
 	hw.RegWriteFlush()
 
-	// usec_delay(150)
+	time.Sleep(150 * time.Microsecond)
 
 	return phy.Op.GetCfgDone()
 }
 
-func PHYHasLink(hw *HW, n int, interval int) (bool, error) {
+func PHYHasLink(hw *HW, n int, interval time.Duration) (bool, error) {
 	for i := 0; i < n; i++ {
 		// Some PHYs require the PHY_STATUS register to be read
 		// twice due to the link bit being sticky.  No harm doing
@@ -361,11 +362,7 @@ func PHYHasLink(hw *HW, n int, interval int) (bool, error) {
 			// If the first read fails, another entity may have
 			// ownership of the resources, wait and try again to
 			// see if they have relinquished the resources yet.
-			if interval >= 1000 {
-				//msec_delay(interval/1000)
-			} else {
-				//usec_delay(interval)
-			}
+			time.Sleep(interval * time.Microsecond)
 		}
 		status, err := hw.PHY.Op.ReadReg(PHY_STATUS)
 		if err != nil {
@@ -374,11 +371,7 @@ func PHYHasLink(hw *HW, n int, interval int) (bool, error) {
 		if status&MII_SR_LINK_STATUS != 0 {
 			return true, nil
 		}
-		if interval >= 1000 {
-			// msec_delay(interval/1000)
-		} else {
-			// usec_delay(interval)
-		}
+		time.Sleep(interval * time.Microsecond)
 	}
 	return false, errors.New("retry timeout")
 }
@@ -411,7 +404,7 @@ func ReadPHYRegMDIC(hw *HW, offset uint32) (uint16, error) {
 	// Increasing the time out as testing showed failures with
 	// the lower time out
 	for i := 0; i < GEN_POLL_TIMEOUT*3; i++ {
-		// usec_delay_irq(50)
+		time.Sleep(50 * time.Microsecond)
 		mdic = hw.RegRead(MDIC)
 		if mdic&MDIC_READY != 0 {
 			break
@@ -430,7 +423,7 @@ func ReadPHYRegMDIC(hw *HW, offset uint32) (uint16, error) {
 	// Allow some time after each MDIC transaction to avoid
 	// reading duplicate data in the next MDIC transaction.
 	if hw.MAC.Type == MACTypePch2lan {
-		// usec_delay_irq(100)
+		time.Sleep(100 * time.Microsecond)
 	}
 
 	return uint16(mdic), nil
@@ -456,7 +449,7 @@ func WritePHYRegMDIC(hw *HW, offset uint32, val uint16) error {
 	// Increasing the time out as testing showed failures with
 	// the lower time out
 	for i := 0; i < GEN_POLL_TIMEOUT*3; i++ {
-		// usec_delay_irq(50)
+		time.Sleep(50 * time.Microsecond)
 		mdic = hw.RegRead(MDIC)
 		if mdic&MDIC_READY != 0 {
 			break
@@ -474,7 +467,7 @@ func WritePHYRegMDIC(hw *HW, offset uint32, val uint16) error {
 	// Allow some time after each MDIC transaction to avoid
 	// reading duplicate data in the next MDIC transaction.
 	if hw.MAC.Type == MACTypePch2lan {
-		// usec_delay_irq(100)
+		time.Sleep(100 * time.Microsecond)
 	}
 
 	return nil
@@ -492,7 +485,7 @@ func DeterminePHYAddress(hw *HW) error {
 			if t != PHYTypeUnknown {
 				return nil
 			}
-			// msec_delay(1)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}
 	return errors.New("not found")
@@ -513,7 +506,7 @@ func WaitAutoneg(hw *HW) error {
 		if status&MII_SR_AUTONEG_COMPLETE != 0 {
 			break
 		}
-		// msec_delay(100)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// PHY_AUTO_NEG_TIME expiration doesn't guarantee auto-negotiation
@@ -663,7 +656,7 @@ func SetupFiberSerdesLink(hw *HW) error {
 
 	hw.RegWrite(CTRL, ctrl)
 	hw.RegWriteFlush()
-	//msec_delay(1)
+	time.Sleep(1 * time.Millisecond)
 
 	// For these adapters, the SW definable pin 1 is set when the optics
 	// detect a signal.  If we have a signal, then poll for a "Link-Up"
@@ -688,7 +681,7 @@ func PollFiberSerdesLink(hw *HW) error {
 	// milliseconds even if the other end is doing it in SW).
 	var i int
 	for ; i < FIBER_LINK_UP_LIMIT; i++ {
-		// msec_delay(10)
+		time.Sleep(10 * time.Millisecond)
 		status := hw.RegRead(STATUS)
 		if status&STATUS_LU != 0 {
 			break

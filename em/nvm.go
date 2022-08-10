@@ -2,6 +2,7 @@ package em
 
 import (
 	"errors"
+	"time"
 )
 
 type NVMType int
@@ -35,7 +36,7 @@ type NVMInfo struct {
 	FlashBaseAddr uint32
 
 	WordSize    uint16
-	DelayUsec   uint16
+	DelayUsec   time.Duration
 	AddressBits uint16
 	OpcodeBits  uint16
 	PageSize    uint16
@@ -77,7 +78,7 @@ func AcquireNVM(hw *HW) error {
 		if eecd&EECD_GNT != 0 {
 			break
 		}
-		// usec_delay(5)
+		time.Sleep(5 * time.Microsecond)
 		eecd = hw.RegRead(EECD)
 	}
 	if tmo == 0 {
@@ -113,7 +114,7 @@ func RaiseEECClk(hw *HW, val uint32) uint32 {
 	val |= EECD_SK
 	hw.RegWrite(EECD, val)
 	hw.RegWriteFlush()
-	//usec_delay(hw->NVM.DelayUsec)
+	time.Sleep(hw.NVM.DelayUsec * time.Microsecond)
 	return val
 }
 
@@ -121,12 +122,12 @@ func LowerEECClk(hw *HW, val uint32) uint32 {
 	val &^= EECD_SK
 	hw.RegWrite(EECD, val)
 	hw.RegWriteFlush()
-	//usec_delay(hw->NVM.DelayUsec)
+	time.Sleep(hw.NVM.DelayUsec * time.Microsecond)
 	return val
 }
 
 func NVMReload(hw *HW) {
-	// usec_delay(10)
+	time.Sleep(10 * time.Microsecond)
 	x := hw.RegRead(CTRL_EXT)
 	x |= CTRL_EXT_EE_RST
 	hw.RegWrite(CTRL_EXT, x)
@@ -178,17 +179,17 @@ func StandbyNVM(hw *HW) {
 		eecd |= EECD_CS
 		hw.RegWrite(EECD, eecd)
 		hw.RegWriteFlush()
-		// usec_delay(nvm.DelayUsec)
+		time.Sleep(nvm.DelayUsec * time.Microsecond)
 		LowerEECClk(hw, eecd)
 	case NVMTypeEepromSpi:
 		eecd |= EECD_CS
 		hw.RegWrite(EECD, eecd)
 		hw.RegWriteFlush()
-		// usec_delay(nvm.DelayUsec)
+		time.Sleep(nvm.DelayUsec * time.Microsecond)
 		eecd &^= EECD_CS
 		hw.RegWrite(EECD, eecd)
 		hw.RegWriteFlush()
-		// usec_delay(nvm.DelayUsec)
+		time.Sleep(nvm.DelayUsec * time.Microsecond)
 	}
 }
 
@@ -208,7 +209,7 @@ func ReadyNVMEeprom(hw *HW) error {
 		eecd &^= EECD_CS | EECD_SK
 		hw.RegWrite(EECD, eecd)
 		hw.RegWriteFlush()
-		// usec_delay(1)
+		time.Sleep(1 * time.Microsecond)
 		tmo := NVM_MAX_RETRY_SPI
 		for tmo > 0 {
 			shiftOutEECbits(hw, NVM_RDSR_OPCODE_SPI, nvm.OpcodeBits)
@@ -216,7 +217,7 @@ func ReadyNVMEeprom(hw *HW) error {
 			if x&NVM_STATUS_RDY_SPI == 0 {
 				break
 			}
-			// usec_delay(5)
+			time.Sleep(5 * time.Microsecond)
 			StandbyNVM(hw)
 			tmo--
 		}
@@ -248,7 +249,7 @@ func shiftOutEECbits(hw *HW, data uint16, count uint16) {
 		hw.RegWrite(EECD, eecd)
 		hw.RegWriteFlush()
 
-		// usec_delay(nvm->delay_usec)
+		time.Sleep(nvm.DelayUsec * time.Microsecond)
 
 		eecd = RaiseEECClk(hw, eecd)
 		eecd = LowerEECClk(hw, eecd)

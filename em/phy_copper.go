@@ -1,5 +1,9 @@
 package em
 
+import (
+	"time"
+)
+
 func PowerUpPHYCopper(hw *HW) {
 	phy := &hw.PHY
 	x, err := phy.Op.ReadReg(PHY_CONTROL)
@@ -18,7 +22,7 @@ func PowerDownPHYCopper(hw *HW) {
 	}
 	x |= MII_CR_POWER_DOWN
 	phy.Op.WriteReg(PHY_CONTROL, x)
-	// msec_delay(1)
+	time.Sleep(1 * time.Millisecond)
 }
 
 func SetupCopperLink(hw *HW) error {

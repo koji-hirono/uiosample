@@ -2,6 +2,7 @@ package em
 
 import (
 	"errors"
+	"time"
 
 	"uiosample/ethdev"
 )
@@ -57,7 +58,7 @@ func (l *Link) UpdateLink(block bool) (*ethdev.LinkStatus, error) {
 		if link_up || !block {
 			break
 		}
-		// rte_delay_ms(LINK_UPDATE_CHECK_INTERVAL)
+		time.Sleep(LINK_UPDATE_CHECK_INTERVAL * time.Millisecond)
 	}
 
 	link := &ethdev.LinkStatus{}
