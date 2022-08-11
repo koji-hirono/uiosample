@@ -7,7 +7,7 @@ type Config struct {
 }
 
 type RingThreshold struct {
-	Prefech   uint8
+	Prefetch  uint8
 	Host      uint8
 	Writeback uint8
 }
