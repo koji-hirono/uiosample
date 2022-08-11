@@ -17,7 +17,10 @@ type Driver struct {
 	link   *Link
 	led    *LED
 	HW     *HW
+	Reg    Reg
 	MAC    [][6]byte
+	nrxq   int
+	ntxq   int
 	rxq    [1]RxQueue
 	txq    [1]TxQueue
 }
@@ -29,6 +32,7 @@ func AttachDriver(dev *pci.Device, logger *log.Logger) (*Driver, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.Reg = Reg{res: bar0}
 	d.Dev = dev
 
 	if logger == nil {
@@ -54,6 +58,7 @@ func AttachDriver(dev *pci.Device, logger *log.Logger) (*Driver, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.HW = hw
 	err = SetupInitFuncs(hw, true)
 	if err != nil {
 		return nil, err
@@ -62,7 +67,6 @@ func AttachDriver(dev *pci.Device, logger *log.Logger) (*Driver, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.HW = hw
 	d.link = NewLink(hw)
 	d.led = NewLED(&hw.MAC)
 	d.MAC = [][6]byte{d.HW.MAC.Addr}
@@ -97,7 +101,9 @@ func (d *Driver) DeviceInfo() (*ethdev.DeviceInfo, error) {
 	return info, nil
 }
 
-func (d *Driver) Configure(rxd, txd int, conf *ethdev.Config) error {
+func (d *Driver) Configure(nrxq, ntxq int, conf *ethdev.Config) error {
+	d.nrxq = nrxq
+	d.ntxq = ntxq
 	d.Config = conf
 	d.link.conf = conf
 	return nil
@@ -117,6 +123,13 @@ func (d *Driver) RxQueueSetup(qid, ndesc int, conf *ethdev.RxConfig) error {
 	q := &d.rxq[qid]
 	q.ID = qid
 	q.NumDesc = ndesc
+	q.Threshold = conf.Threshold
+	q.Reg = d.Reg
+	addr, err := q.InitBuf()
+	if err != nil {
+		return err
+	}
+	q.RingAddr = addr
 	return nil
 }
 
@@ -133,6 +146,13 @@ func (d *Driver) TxQueueSetup(qid, ndesc int, conf *ethdev.TxConfig) error {
 	q := &d.txq[qid]
 	q.ID = qid
 	q.NumDesc = ndesc
+	q.Threshold = conf.Threshold
+	q.Reg = d.Reg
+	addr, err := q.InitBuf()
+	if err != nil {
+		return err
+	}
+	q.RingAddr = addr
 	return nil
 }
 
@@ -263,7 +283,7 @@ func (d *Driver) Start() error {
 }
 
 // int eth_em_stop(struct rte_eth_dev *dev)
-func (d *Driver) Stop() {
+func (d *Driver) Stop() error {
 	d.RxTxControl(false)
 
 	d.HW.MAC.Op.ResetHW()
@@ -282,10 +302,11 @@ func (d *Driver) Stop() {
 	d.HW.PHY.Op.PowerDown()
 
 	d.ClearQueues()
+	return nil
 }
 
 // int eth_em_close(struct rte_eth_dev *dev)
-func (d *Driver) Close() {
+func (d *Driver) Close() error {
 	d.Stop()
 
 	d.FreeQueues()
@@ -295,6 +316,7 @@ func (d *Driver) Close() {
 	d.ReleaseManageAbility()
 
 	d.HWControlRelease()
+	return nil
 }
 
 func (d *Driver) Reset() error {
@@ -304,7 +326,7 @@ func (d *Driver) Reset() error {
 
 // int eth_em_promiscuous_enable(struct rte_eth_dev *dev)
 // int eth_em_promiscuous_disable(struct rte_eth_dev *dev)
-func (d *Driver) SetPromisc(enable bool) {
+func (d *Driver) SetPromisc(enable bool) error {
 	x := d.HW.RegRead(RCTL)
 	if enable {
 		x |= RCTL_UPE
@@ -314,11 +336,12 @@ func (d *Driver) SetPromisc(enable bool) {
 		x &^= RCTL_SBP
 	}
 	d.HW.RegWrite(RCTL, x)
+	return nil
 }
 
 // int eth_em_allmulticast_enable(struct rte_eth_dev *dev)
 // int eth_em_allmulticast_disable(struct rte_eth_dev *dev)
-func (d *Driver) SetAllMulticast(enable bool) {
+func (d *Driver) SetAllMulticast(enable bool) error {
 	x := d.HW.RegRead(RCTL)
 	if enable {
 		x |= RCTL_MPE
@@ -326,6 +349,7 @@ func (d *Driver) SetAllMulticast(enable bool) {
 		x &^= RCTL_MPE
 	}
 	d.HW.RegWrite(RCTL, x)
+	return nil
 }
 
 func (d *Driver) GetMACAddr() ([6]byte, error) {
@@ -417,7 +441,7 @@ func (d *Driver) HardwareInit() error {
 		hw.FC.RequestedMode = FCModeFull
 	}
 
-	err := d.HWInit()
+	err := hw.MAC.Op.InitHW()
 	if err != nil {
 		return err
 	}
@@ -575,13 +599,180 @@ func (d *Driver) RxTxControl(enable bool) {
 	hw.RegWriteFlush()
 }
 
+const MAX_BUF_SIZE = 16384
+
 // int eth_em_rx_init(struct rte_eth_dev *dev)
 func (d *Driver) RxInit() error {
+	hw := d.HW
+	rxmode := &d.Config.Rx
+
+	// Make sure receives are disabled while setting
+	// up the descriptor ring.
+	rctl := hw.RegRead(RCTL)
+	hw.RegWrite(RCTL, rctl&^RCTL_EN)
+
+	rfctl := hw.RegRead(RFCTL)
+
+	// Disable extended descriptor type.
+	rfctl &^= RFCTL_EXTEN
+	// Disable accelerated acknowledge
+	if hw.MAC.Type == MACType82574 {
+		rfctl |= RFCTL_ACK_DIS
+	}
+
+	hw.RegWrite(RFCTL, rfctl)
+
+	// XXX TEMPORARY WORKAROUND: on some systems with 82573
+	// long latencies are observed, like Lenovo X60. This
+	// change eliminates the problem, but since having positive
+	// values in RDTR is a known source of problems on other
+	// platforms another solution is being sought.
+	if hw.MAC.Type == MACType82573 {
+		hw.RegWrite(RDTR, 0x20)
+	}
+
+	// Determine RX bufsize.
+	bsize, ok := d.rctlBsize(MAX_BUF_SIZE)
+	if !ok {
+		return errors.New("not found")
+	}
+	rctl |= bsize
+
+	// Configure and enable each RX queue.
+	for i := 0; i < d.nrxq; i++ {
+		rxq := &d.rxq[i]
+
+		// Allocate buffers for descriptor rings and setup queue
+		//err := alloc_rx_queue_mbufs(rxq)
+		//if err != nil {
+		//	return err
+		//}
+
+		addr := rxq.RingAddr
+		hw.RegWrite(RDLEN(i), uint32(rxq.NumDesc)*SizeofRxDesc)
+		hw.RegWrite(RDBAH(i), uint32(addr>>32))
+		hw.RegWrite(RDBAL(i), uint32(addr))
+
+		hw.RegWrite(RDH(i), 0)
+		//hw.RegWrite(RDT(i), uint32(rxq.NumDesc-1))
+		hw.RegWrite(RDT(i), 0)
+
+		rxdctl := hw.RegRead(RXDCTL(0))
+		rxdctl &= 0xfe000000
+		rxdctl |= uint32(rxq.Threshold.Prefetch & 0x3f)
+		rxdctl |= uint32(rxq.Threshold.Host&0x3f) << 8
+		rxdctl |= uint32(rxq.Threshold.Writeback&0x3f) << 16
+		rxdctl |= RXDCTL_GRAN
+		hw.RegWrite(RXDCTL(i), rxdctl)
+	}
+
+	// Setup the Checksum Register.
+	// Receive Full-Packet Checksum Offload is mutually exclusive with RSS.
+	rxcsum := hw.RegRead(RXCSUM)
+	if rxmode.OffloadCap&ethdev.RxOffloadCapChecksum != 0 {
+		rxcsum |= RXCSUM_IPOFL
+	} else {
+		rxcsum &^= RXCSUM_IPOFL
+	}
+	hw.RegWrite(RXCSUM, rxcsum)
+
+	// Setup the Receive Control Register.
+	if rxmode.OffloadCap&ethdev.RxOffloadCapKeepCRC != 0 {
+		rctl &^= RCTL_SECRC // Do not Strip Ethernet CRC.
+	} else {
+		rctl |= RCTL_SECRC // Strip Ethernet CRC.
+	}
+
+	rctl &^= 3 << RCTL_MO_SHIFT
+	rctl |= RCTL_EN
+	rctl |= RCTL_BAM
+	rctl |= RCTL_LBM_NO
+	rctl |= RCTL_RDMTS_HALF
+	rctl |= hw.MAC.MCFilterType << RCTL_MO_SHIFT
+
+	// Make sure VLAN Filters are off.
+	rctl &^= RCTL_VFE
+	// Don't store bad packets.
+	rctl &^= RCTL_SBP
+	// Legacy descriptor type.
+	rctl &^= RCTL_DTYP_MASK
+
+	// Enable Receives.
+	hw.RegWrite(RCTL, rctl)
 	return nil
+}
+
+func (d *Driver) rctlBsize(size uint32) (uint32, bool) {
+	switch {
+	case size > 16384:
+		return 0, false
+	case size > 8192:
+		return RCTL_SZ_16384 | RCTL_BSEX, true
+	case size > 4096:
+		return RCTL_SZ_8192 | RCTL_BSEX, true
+	case size > 2048:
+		return RCTL_SZ_4096 | RCTL_BSEX, true
+	case size > 1024:
+		return RCTL_SZ_2048, true
+	case size > 512:
+		return RCTL_SZ_1024, true
+	case size > 256:
+		return RCTL_SZ_512, true
+	default:
+		return RCTL_SZ_256, true
+	}
 }
 
 // void eth_em_tx_init(struct rte_eth_dev *dev)
 func (d *Driver) TxInit() error {
+	hw := d.HW
+	for i := 0; i < d.ntxq; i++ {
+		txq := &d.txq[i]
+		addr := txq.RingAddr
+		hw.RegWrite(TDLEN(i), uint32(txq.NumDesc)*SizeofTxDesc)
+		hw.RegWrite(TDBAH(i), uint32(addr>>32))
+		hw.RegWrite(TDBAL(i), uint32(addr))
+
+		// Setup the HW Tx Head and Tail descriptor pointers.
+		hw.RegWrite(TDT(i), 0)
+		hw.RegWrite(TDH(i), 0)
+
+		// Setup Transmit threshold registers.
+		txdctl := hw.RegRead(TXDCTL(i))
+		// bit 22 is reserved, on some models should always be 0,
+		// on others  - always 1.
+		txdctl &= TXDCTL_COUNT_DESC
+		txdctl |= uint32(txq.Threshold.Prefetch & 0x3f)
+		txdctl |= uint32(txq.Threshold.Host&0x3f) << 8
+		txdctl |= uint32(txq.Threshold.Writeback&0x3f) << 16
+		txdctl |= TXDCTL_GRAN
+		hw.RegWrite(TXDCTL(i), txdctl)
+	}
+
+	// Program the Transmit Control Register.
+	tctl := hw.RegRead(TCTL)
+	tctl &^= TCTL_CT
+	tctl |= TCTL_PSP
+	tctl |= TCTL_RTLC
+	tctl |= TCTL_EN
+	tctl |= COLLISION_THRESHOLD << CT_SHIFT
+
+	// SPT and CNP Si errata workaround to avoid data corruption
+	if hw.MAC.Type == MACTypePch_spt {
+		iosfpc := hw.RegRead(IOSFPC)
+		iosfpc |= RCTL_RDMTS_HEX
+		hw.RegWrite(IOSFPC, iosfpc)
+
+		// Dropping the number of outstanding requests from
+		// 3 to 2 in order to avoid a buffer overrun.
+		tarc := hw.RegRead(TARC(0))
+		tarc &^= TARC0_CB_MULTIQ_3_REQ
+		tarc |= TARC0_CB_MULTIQ_2_REQ
+		hw.RegWrite(TARC(0), tarc)
+	}
+
+	// This write will effectively turn on the transmit unit.
+	hw.RegWrite(TCTL, tctl)
 	return nil
 }
 
@@ -605,10 +796,10 @@ func (d *Driver) FreeQueues() {
 		for _, rxq := range d.rxq {
 			eth_em_rx_queue_release(dev, i)
 		}
-		dev->data->nb_rx_queues = 0
+		d.nrxq = 0
 		for _, txq := range d.txq {
 			eth_em_tx_queue_release(dev, i)
 		}
-		dev->data->nb_tx_queues = 0
+		d.ntxq = 0
 	*/
 }

@@ -1,5 +1,9 @@
 package em
 
+import (
+	"uiosample/pci"
+)
+
 const (
 	// Device Control - RW
 	CTRL = 0x0000
@@ -61,6 +65,9 @@ const (
 	// LED Control - RW
 	LEDCTL = 0x0e00
 
+	// TX corrupted data
+	IOSFPC = 0x0f28
+
 	// Packet Buffer Allocation - RW
 	PBA = 0x1000
 
@@ -71,30 +78,35 @@ const (
 	FCRTH = 0x2168
 
 	// Receive Descriptor Base Address
-	RDBAL = 0x2800
-	RDBAH = 0x2804
+	// RDBAL0 = 0x2800
+	// RDBAH0 = 0x2804
 
 	// Receive Descriptor Length
-	RDLEN = 0x2808
-	RDH   = 0x2810
-	RDT   = 0x2818
+	// RDLEN0 = 0x2808
+	// RDH0 = 0x2810
+	// RDT0 = 0x2818
+
+	// Rx Delay Timer - RW
+	RDTR = 0x2820
 
 	// Receive Descriptor Control
-	RXDCTL = 0x2828
+	// RXDCTL0 = 0x2828
 
 	// Transmit Descriptor Base Address
-	TDBAL = 0x3800
-	TDBAH = 0x3804
+	// TDBAL0 = 0x3800
+	// TDBAH0 = 0x3804
 
 	// Transmit Descriptor Length
-	TDLEN = 0x3808
-	TDH   = 0x3810
-	TDT   = 0x3818
+	// TDLEN0 = 0x3808
+	// TDH0 = 0x3810
+	// TDT0 = 0x3818
 
 	// Transmit Interrupt Delay Value
 	TIDV = 0x3820
 
 	// TXDCTL0 = 0x3828
+
+	// TARC0 = 0x3840
 
 	// some statistics register
 
@@ -286,6 +298,12 @@ const (
 
 	// Link Partner Ability - RW
 	PCS_LPAB = 0x0421c
+
+	// Rx Checksum Control - RW
+	RXCSUM = 0x05000
+
+	// Receive Filter Control
+	RFCTL = 0x05008
 
 	// Multicast Table Array - RW Array
 	MTA = 0x5200
@@ -487,17 +505,45 @@ const (
 
 // RCTL
 const (
-	RCTL_EN     uint32 = uint32(1) << 1
-	RCTL_SBP    uint32 = uint32(1) << 2
-	RCTL_UPE    uint32 = uint32(1) << 3
-	RCTL_MPE    uint32 = uint32(1) << 4
-	RCTL_LPE    uint32 = uint32(1) << 5
-	RCTL_LBM    uint32 = uint32(1)<<6 | uint32(1)<<7
-	RCTL_BAM    uint32 = uint32(1) << 15
-	RCTL_BSIZE1 uint32 = uint32(1) << 16
-	RCTL_BSIZE2 uint32 = uint32(1) << 17
-	RCTL_BSEX   uint32 = uint32(1) << 25
-	RCTL_SECRC  uint32 = uint32(1) << 26
+	RCTL_RST        uint32 = 0x00000001 // Software reset
+	RCTL_EN         uint32 = 0x00000002 // enable
+	RCTL_SBP        uint32 = 0x00000004 // store bad packet
+	RCTL_UPE        uint32 = 0x00000008 // unicast promisc enable
+	RCTL_MPE        uint32 = 0x00000010 // multicast promisc enable
+	RCTL_LPE        uint32 = 0x00000020 // long packet enable
+	RCTL_LBM_NO     uint32 = 0x00000000 // no loopback mode
+	RCTL_LBM_MAC    uint32 = 0x00000040 // MAC loopback mode
+	RCTL_LBM_TCVR   uint32 = 0x000000C0 // tcvr loopback mode
+	RCTL_DTYP_PS    uint32 = 0x00000400 // Packet Split descriptor
+	RCTL_RDMTS_HALF uint32 = 0x00000000 // Rx desc min thresh size
+	RCTL_RDMTS_HEX  uint32 = 0x00010000
+
+	RCTL_DTYP_MASK uint32 = 0x00000c00
+
+	RCTL_RDMTS1_HEX = RCTL_RDMTS_HEX
+
+	RCTL_MO_SHIFT = 12 // multicast offset shift
+
+	RCTL_MO_3 uint32 = 0x00003000 // multicast offset 15:4
+	RCTL_BAM  uint32 = 0x00008000 // broadcast enable
+
+	// these buffer sizes are valid if E1000_RCTL_BSEX is 0
+	RCTL_SZ_2048 uint32 = 0x00000000 // Rx buffer size 2048
+	RCTL_SZ_1024 uint32 = 0x00010000 // Rx buffer size 1024
+	RCTL_SZ_512  uint32 = 0x00020000 // Rx buffer size 512
+	RCTL_SZ_256  uint32 = 0x00030000 // Rx buffer size 256
+
+	// these buffer sizes are valid if E1000_RCTL_BSEX is 1
+	RCTL_SZ_16384 uint32 = 0x00010000 // Rx buffer size 16384
+	RCTL_SZ_8192  uint32 = 0x00020000 // Rx buffer size 8192
+	RCTL_SZ_4096  uint32 = 0x00030000 // Rx buffer size 4096
+	RCTL_VFE      uint32 = 0x00040000 // vlan filter enable
+	RCTL_CFIEN    uint32 = 0x00080000 // canonical form enable
+	RCTL_CFI      uint32 = 0x00100000 // canonical form indicator
+	RCTL_DPF      uint32 = 0x00400000 // discard pause frames
+	RCTL_PMCF     uint32 = 0x00800000 // pass MAC control frames
+	RCTL_BSEX     uint32 = 0x02000000 // Buffer size extension
+	RCTL_SECRC    uint32 = 0x04000000 // Strip Ethernet CRC
 )
 
 // TXCW
@@ -556,6 +602,131 @@ const (
 	FCRTL_XONE uint32 = 0x80000000 // Enable XON frame transmission
 )
 
+func RDBAL(n int) int {
+	if n < 4 {
+		return 0x2800 + (n * 0x100)
+	} else {
+		return 0xc000 + (n * 0x40)
+	}
+}
+
+func RDBAH(n int) int {
+	if n < 4 {
+		return 0x2804 + (n * 0x100)
+	} else {
+		return 0xc004 + (n * 0x40)
+	}
+}
+
+func RDLEN(n int) int {
+	if n < 4 {
+		return 0x2808 + (n * 0x100)
+	} else {
+		return 0xc008 + (n * 0x40)
+	}
+}
+
+func SRRCTL(n int) int {
+	if n < 4 {
+		return 0x280c + (n * 0x100)
+	} else {
+		return 0xc00c + (n * 0x40)
+	}
+}
+
+func RDH(n int) int {
+	if n < 4 {
+		return 0x2810 + (n * 0x100)
+	} else {
+		return 0xc010 + (n * 0x40)
+	}
+}
+
+func RDCTL(n int) int {
+	if n < 4 {
+		return 0x2814 + (n * 0x100)
+	} else {
+		return 0xc014 + (n * 0x40)
+	}
+}
+
+func RDT(n int) int {
+	if n < 4 {
+		return 0x2818 + (n * 0x100)
+	} else {
+		return 0xc018 + (n * 0x40)
+	}
+}
+
+func RXDCTL(n int) int {
+	if n < 4 {
+		return 0x2828 + (n * 0x100)
+	} else {
+		return 0xc028 + (n * 0x40)
+	}
+}
+
+// RXDCTL
+const (
+	RXDCTL_GRAN uint32 = 0x01000000 // RXDCTL Granularity
+)
+
+func RQDPC(n int) int {
+	if n < 4 {
+		return 0x2830 + (n * 0x100)
+	} else {
+		return 0xc030 + (n * 0x40)
+	}
+}
+
+func TDBAL(n int) int {
+	if n < 4 {
+		return 0x3800 + (n * 0x100)
+	} else {
+		return 0xe000 + (n * 0x40)
+	}
+}
+
+func TDBAH(n int) int {
+	if n < 4 {
+		return 0x3804 + (n * 0x100)
+	} else {
+		return 0xe004 + (n * 0x40)
+	}
+}
+
+func TDLEN(n int) int {
+	if n < 4 {
+		return 0x3808 + (n * 0x100)
+	} else {
+		return 0xe008 + (n * 0x40)
+	}
+}
+
+func TDH(n int) int {
+	if n < 4 {
+		return 0x3810 + (n * 0x100)
+	} else {
+		return 0xe010 + (n * 0x40)
+	}
+}
+
+func TXCTL(n int) int {
+	if n < 4 {
+		return 0x3814 + (n * 0x100)
+	} else {
+		return 0xe014 + (n * 0x40)
+	}
+}
+
+func TDT(n int) int {
+	if n < 4 {
+		return 0x3818 + (n * 0x100)
+	} else {
+		return 0xe018 + (n * 0x40)
+	}
+}
+
 func TXDCTL(n int) int {
 	if n < 4 {
 		return 0x03828 + (n * 0x100)
@@ -575,6 +746,33 @@ const (
 	TXDCTL_FULL_TX_DESC_WB      uint32 = uint32(0x01010000)
 	TXDCTL_MAX_TX_DESC_PREFETCH uint32 = uint32(0x0100001f)
 	TXDCTL_COUNT_DESC           uint32 = uint32(0x00400000)
+)
+
+func TDWBAL(n int) int {
+	if n < 4 {
+		return 0x03838 + (n * 0x100)
+	} else {
+		return 0x0e038 + (n * 0x40)
+	}
+}
+
+func TDWBAH(n int) int {
+	if n < 4 {
+		return 0x0383c + (n * 0x100)
+	} else {
+		return 0x0e03c + (n * 0x40)
+	}
+}
+
+func TARC(n int) int {
+	return 0x03840 + (n * 0x100)
+}
+
+// TARC
+const (
+	TARC0_ENABLE          uint32 = 0x00000400 // Enable Tx Queue 0
+	TARC0_CB_MULTIQ_3_REQ uint32 = 0x30000000
+	TARC0_CB_MULTIQ_2_REQ uint32 = 0x20000000
 )
 
 func RAL(n int) int {
@@ -623,6 +821,26 @@ const (
 	PCS_LSTS_AN_COMPLETE = 0x10000
 )
 
+// RXCSUM
+const (
+	RXCSUM_IPOFL  uint32 = 0x00000100 // IPv4 checksum offload
+	RXCSUM_TUOFL  uint32 = 0x00000200 // TCP / UDP checksum offload
+	RXCSUM_CRCOFL uint32 = 0x00000800 // CRC32 offload enable
+	RXCSUM_IPPCSE uint32 = 0x00001000 // IP payload checksum enable
+	RXCSUM_PCSD   uint32 = 0x00002000 // packet checksum disabled
+)
+
+// RFCTL
+const (
+	RFCTL_NFSW_DIS         uint32 = 0x00000040
+	RFCTL_NFSR_DIS         uint32 = 0x00000080
+	RFCTL_ACK_DIS          uint32 = 0x00001000
+	RFCTL_EXTEN            uint32 = 0x00008000
+	RFCTL_IPV6_EX_DIS      uint32 = 0x00010000
+	RFCTL_NEW_IPV6_EXT_DIS uint32 = 0x00020000
+	RFCTL_LEF              uint32 = 0x00040000
+)
+
 // MANC
 const (
 	MANC_SMBUS_EN           uint32 = 0x00000001 // SMBus Enabled - RO
@@ -661,3 +879,23 @@ const (
 	FWSM_FW_VALID        uint32 = 0x00008000
 	FWSM_HI_EN_ONLY_MODE uint32 = 0x4
 )
+
+type Reg struct {
+	res pci.Resource
+}
+
+func (r Reg) Read(reg int) uint32 {
+	return r.res.Read32(reg)
+}
+
+func (r Reg) Write(reg int, val uint32) {
+	r.res.Write32(reg, val)
+}
+
+func (r Reg) MaskWrite(reg int, val, mask uint32) {
+	r.res.MaskWrite32(reg, val, mask)
+}
+
+func (r Reg) WriteFlush() {
+	r.Read(STATUS)
+}

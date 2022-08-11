@@ -1,6 +1,8 @@
 package em
 
 import (
+	"errors"
+
 	"uiosample/pci"
 )
 
@@ -113,6 +115,8 @@ type HW struct {
 
 	BAR0 pci.Resource
 	BAR1 pci.Resource
+
+	Spec interface{}
 }
 
 func NewHW(id DeviceID, bar0 pci.Resource, bar1 pci.Resource) (*HW, error) {
@@ -147,7 +151,32 @@ func SetupInitFuncs(hw *HW, initdev bool) error {
 	// e1000_init_nvm_ops_generic(hw)
 	// e1000_init_mbx_ops_generic(hw)
 
-	// hw->mac.typeによって初期化関数を呼ぶ
+	switch hw.MAC.Type {
+	case MACType82542:
+		//I82542Init(hw)
+	case MACType82543, MACType82544:
+		//I82543Init(hw)
+	case MACType82540, MACType82545, MACType82545Rev3, MACType82546, MACType82546Rev3:
+		I82540Init(hw)
+	case MACType82541, MACType82541Rev2, MACType82547, MACType82547Rev2:
+		//I82541Init(hw)
+	case MACType82571, MACType82572, MACType82573, MACType82574, MACType82583:
+		//I82571Init(hw)
+	case MACType80003es2lan:
+		//I80003es2lanInit(hw)
+	case MACTypeIch8lan, MACTypeIch9lan, MACTypeIch10lan, MACTypePchlan, MACTypePch2lan, MACTypePch_lpt, MACTypePch_spt, MACTypePch_cnp, MACTypePch_adp:
+		//ICH8lanInit(hw)
+	case MACType82575, MACType82576, MACType82580, MACTypeI350, MACTypeI354:
+		//I82575Init(hw)
+	case MACTypeI210, MACTypeI211:
+		//I210Init(hw)
+	case MACTypeVfadapt:
+		//VFInit(hw)
+	case MACTypeVfadaptI350:
+		//VFInit(hw)
+	default:
+		return errors.New("not supported")
+	}
 
 	if initdev {
 		err := hw.MAC.Op.InitParams()
@@ -162,10 +191,10 @@ func SetupInitFuncs(hw *HW, initdev bool) error {
 		if err != nil {
 			return err
 		}
-		err = hw.MBX.Op.InitParams()
-		if err != nil {
-			return err
-		}
+		//err = hw.MBX.Op.InitParams()
+		//if err != nil {
+		//	return err
+		//}
 	}
 	return nil
 }
