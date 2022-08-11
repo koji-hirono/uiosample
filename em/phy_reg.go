@@ -126,6 +126,15 @@ const (
 	SR_1000T_PHY_EXCESSIVE_IDLE_ERR_COUNT = 5
 )
 
+// 82580 PHY Power Management
+const (
+	I82580_PHY_POWER_MGMT = 0xE14
+	I82580_PM_SPD         = 0x0001 // Smart Power Down
+	I82580_PM_D0_LPLU     = 0x0002 // For D0a states
+	I82580_PM_D3_LPLU     = 0x0004 // For all other states
+	I82580_PM_GO_LINKD    = 0x0020 // Go Link Disconnect
+)
+
 const (
 	I82578_EPSCR_DOWNSHIFT_ENABLE       = 0x0020
 	I82578_EPSCR_DOWNSHIFT_COUNTER_MASK = 0x001C

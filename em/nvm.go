@@ -277,3 +277,18 @@ func shiftInEECbits(hw *HW, count uint16) uint16 {
 	}
 	return data
 }
+
+func ReadMACAddr(hw *HW) error {
+	high := hw.RegRead(RAH(0))
+	low := hw.RegRead(RAL(0))
+
+	hw.MAC.PermAddr[0] = byte(low)
+	hw.MAC.PermAddr[1] = byte(low >> 8)
+	hw.MAC.PermAddr[2] = byte(low >> 16)
+	hw.MAC.PermAddr[3] = byte(low >> 24)
+	hw.MAC.PermAddr[4] = byte(high)
+	hw.MAC.PermAddr[5] = byte(high >> 8)
+
+	copy(hw.MAC.Addr[:], hw.MAC.PermAddr[:])
+	return nil
+}

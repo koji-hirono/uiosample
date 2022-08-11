@@ -501,3 +501,62 @@ func GetSpeedAndDuplexCopper(hw *HW) (uint16, uint16, error) {
 func GetSpeedAndDuplexFiberSerdes(hw *HW) (uint16, uint16, error) {
 	return 1000, FULL_DUPLEX, nil
 }
+
+func CheckAltMACAddr(hw *HW) error {
+	var data [1]uint16
+	err := hw.NVM.Op.Read(NVM_COMPAT, data[:])
+	if err != nil {
+		return err
+	}
+
+	// not supported on older hardware or 82573
+	if hw.MAC.Type < MACType82571 || hw.MAC.Type == MACType82573 {
+		return nil
+	}
+
+	// Alternate MAC address is handled by the option ROM for 82580
+	// and newer. SW support not required.
+	if hw.MAC.Type >= MACType82580 {
+		return nil
+	}
+
+	err = hw.NVM.Op.Read(NVM_ALT_MAC_ADDR_PTR, data[:])
+	if err != nil {
+		return err
+	}
+	offset := data[0]
+	if offset == 0xffff || offset == 0 {
+		return nil
+	}
+	switch hw.Bus.Func {
+	case 1:
+		offset += ALT_MAC_ADDRESS_OFFSET_LAN1
+	case 2:
+		offset += ALT_MAC_ADDRESS_OFFSET_LAN2
+	case 3:
+		offset += ALT_MAC_ADDRESS_OFFSET_LAN3
+	}
+
+	var addr [6]byte
+	for i := 0; i < 6; i += 2 {
+		reg := offset + uint16(i>>1)
+		err := hw.NVM.Op.Read(reg, data[:])
+		if err != nil {
+			return err
+		}
+		addr[i] = byte(data[0])
+		addr[i+1] = byte(data[0] >> 8)
+	}
+
+	// if multicast bit is set, the alternate address will not be used
+	if addr[0]&0x01 != 0 {
+		return nil
+	}
+
+	// We have a valid alternate MAC address, and we want to treat it the
+	// same as the normal permanent MAC address stored by the HW into the
+	// RAR. Do this by mapping this address into RAR0.
+	hw.MAC.Op.SetRAR(addr, 0)
+
+	return nil
+}

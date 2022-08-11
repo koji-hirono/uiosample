@@ -1,5 +1,9 @@
 package em
 
+import (
+	"errors"
+)
+
 type BusType int
 
 const (
@@ -53,6 +57,15 @@ type BusInfo struct {
 	PCICmdWord uint16
 }
 
+const (
+	PCIE_LINK_STATUS      = 0x12
+	PCIE_LINK_WIDTH_MASK  = 0x3f0
+	PCIE_LINK_WIDTH_SHIFT = 4
+	PCIE_LINK_SPEED_MASK  = 0x0f
+	PCIE_LINK_SPEED_2500  = 0x01
+	PCIE_LINK_SPEED_5000  = 0x02
+)
+
 func GetBusInfoPCI(hw *HW) error {
 	mac := &hw.MAC
 	bus := &hw.Bus
@@ -98,7 +111,38 @@ func GetBusInfoPCI(hw *HW) error {
 	return nil
 }
 
+func GetBusInfoPCIE(hw *HW) error {
+	mac := &hw.MAC
+	bus := &hw.Bus
+
+	bus.Type = BusTypePCIExpress
+
+	status, err := ReadPCIECapReg(hw, PCIE_LINK_STATUS)
+	if err != nil {
+		bus.Width = BusWidthUnknown
+		bus.Speed = BusSpeedUnknown
+	} else {
+		switch status & PCIE_LINK_SPEED_MASK {
+		case PCIE_LINK_SPEED_2500:
+			bus.Speed = BusSpeed2500
+		case PCIE_LINK_SPEED_5000:
+			bus.Speed = BusSpeed5000
+		default:
+			bus.Speed = BusSpeedUnknown
+		}
+		bus.Width = BusWidth((status & PCIE_LINK_WIDTH_MASK) >> PCIE_LINK_WIDTH_SHIFT)
+	}
+
+	mac.Op.SetLANID()
+
+	return nil
+}
+
 func SetLANIDMultiPortPCI(hw *HW) {
 	bus := &hw.Bus
 	bus.Func = 0
+}
+
+func ReadPCIECapReg(hw *HW, reg uint32) (uint16, error) {
+	return 0, errors.New("not implemented")
 }

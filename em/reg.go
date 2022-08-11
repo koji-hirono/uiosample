@@ -140,6 +140,9 @@ const (
 	// Collision Count - R/clr
 	COLC = 0x4028
 
+	// Circuit Breaker Tx Packet Count
+	CBTMPC = 0x402c
+
 	// Defer Count - R/clr
 	DC = 0x4030
 
@@ -151,9 +154,14 @@ const (
 
 	// Carrier Extension Error Count - R/clr
 	CEXTERR = 0x403c
+	// Host Transmit Discarded Packets
+	HTDPMC = 0x403c
 
 	// Receive Length Error Count - R/clr
 	RLEC = 0x4040
+
+	// Circuit Breaker Rx Dropped Count
+	CBRDPC = 0x4044
 
 	// XON Rx Count - R/clr
 	XONRXC = 0x4048
@@ -273,16 +281,66 @@ const (
 	PTC1522 = 0x40ec
 
 	// Multicast Packets Tx Count - R/clr
-	MPTC = 0x040f0
+	MPTC = 0x40f0
 
 	// Broadcast Packets Tx Count - R/clr
-	BPTC = 0x040f4
+	BPTC = 0x40f4
 
 	// TCP Segmentation Context Tx - R/clr
 	TSCTC = 0x40f8
 
 	// TCP Segmentation Context Tx Fail - R/clr
 	TSCTFC = 0x40fc
+	// Circuit Breaker Rx Packet Count
+	CBRMPC = 0x40fc
+
+	// Interrupt Assertion Count
+	IAC = 0x4100
+
+	// Interrupt Cause Rx Pkt Timer Expire Count
+	ICRXPTC = 0x4104
+	// Rx Packets To Host
+	RPTHC = 0x4104
+
+	// Interrupt Cause Rx Abs Timer Expire Count
+	ICRXATC = 0x4108
+
+	// Interrupt Cause Tx Pkt Timer Expire Count
+	ICTXPTC = 0x410c
+
+	// Interrupt Cause Tx Abs Timer Expire Count
+	ICTXATC = 0x4110
+
+	// Interrupt Cause Tx Queue Empty Count
+	ICTXQEC = 0x4118
+	// Host Good Packets Tx Count
+	HGPTC = 0x4118
+
+	// Interrupt Cause Tx Queue Min Thresh Count
+	ICTXQMTC = 0x411c
+
+	// Interrupt Cause Rx Desc Min Thresh Count
+	ICRXDMTC = 0x4120
+
+	// Interrupt Cause Receiver Overrun Count
+	ICRXOC = 0x4124
+	// Host Tx Circuit Breaker Dropped Count
+	HTCBDPC = 0x4124
+
+	// Host Good Octets Received Count Low
+	HGORCL = 0x4128
+
+	// Host Good Octets Received Count High
+	HGORCH = 0x412c
+
+	// Host Good Octets Transmit Count Low
+	HGOTCL = 0x4130
+
+	// Host Good Octets Transmit Count High
+	HGOTCH = 0x4134
+
+	// Length Errors Count
+	LENERRS = 0x4138
 
 	// PCS Configuration 0 - RW
 	PCS_CFG0 = 0x4200
@@ -298,6 +356,9 @@ const (
 
 	// Link Partner Ability - RW
 	PCS_LPAB = 0x0421c
+
+	// SerDes/SGMII Code Violation Pkt Count
+	SCVPC = 0x4228
 
 	// Rx Checksum Control - RW
 	RXCSUM = 0x05000
