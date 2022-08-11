@@ -16,9 +16,9 @@ type RxQueue struct {
 	Reg       Reg
 	Buf       [][]byte
 	Ring      []RxDesc
-	rdh       int
-	rdt       int
-	rxnext    int
+	head      int
+	tail      int
+	next      int
 }
 
 const RxQueueOffloadCap = ethdev.RxOffloadCapVLANStrip |
@@ -72,55 +72,55 @@ func (q *RxQueue) Do(pkts [][]byte) int {
 }
 
 func (q *RxQueue) Rx() []byte {
-	length := q.Ring[q.rxnext].Length
-	pkt := q.Buf[q.rxnext][:length]
-	q.Buf[q.rxnext] = nil
-	q.rxnext = (q.rxnext + 1) % q.NumDesc
+	length := q.Ring[q.next].Length
+	pkt := q.Buf[q.next][:length]
+	q.Buf[q.next] = nil
+	q.next = (q.next + 1) % q.NumDesc
 	return pkt
 }
 
 func (q *RxQueue) Can() bool {
-	if q.rxnext == q.rdh {
+	if q.next == q.head {
 		return false
 	}
-	if q.Ring[q.rxnext].Status&RxStatusDD == 0 {
+	if q.Ring[q.next].Status&RxStatusDD == 0 {
 		return false
 	}
 	return true
 }
 
 func (q *RxQueue) CanAddBuf() bool {
-	rdt := (q.rdt + 1) % q.NumDesc
-	return rdt != q.rxnext
+	tail := (q.tail + 1) % q.NumDesc
+	return tail != q.next
 }
 
 func (q *RxQueue) AddBuf(p []byte, phys uintptr) {
-	desc := &q.Ring[q.rdt]
+	desc := &q.Ring[q.tail]
 	desc.Addr = phys
 	desc.Status &^= RxStatusDD
-	q.Buf[q.rdt] = p
-	q.rdt = (q.rdt + 1) % q.NumDesc
+	q.Buf[q.tail] = p
+	q.tail = (q.tail + 1) % q.NumDesc
 }
 
 func (q *RxQueue) FreeAllBuf() {
-	for q.rdt != q.rdh {
-		q.rdt = (q.rdt - 1) % q.NumDesc
-		desc := &q.Ring[q.rdt]
+	for q.tail != q.head {
+		q.tail = (q.tail - 1) % q.NumDesc
+		desc := &q.Ring[q.tail]
 		desc.Addr = ^uintptr(0)
 		desc.Status &^= RxStatusDD
-		hugetlb.Free(q.Buf[q.rdt])
-		q.Buf[q.rdt] = nil
+		hugetlb.Free(q.Buf[q.tail])
+		q.Buf[q.tail] = nil
 	}
 }
 
 func (q *RxQueue) Sync() {
-	rdh := int(q.Reg.Read(RDH(q.ID)))
-	if rdh < q.NumDesc-1 {
-		q.rdh = rdh
+	head := int(q.Reg.Read(RDH(q.ID)))
+	if head < q.NumDesc-1 {
+		q.head = head
 	} else {
-		q.rdh = q.NumDesc - 1
+		q.head = q.NumDesc - 1
 	}
-	q.Reg.Write(RDT(q.ID), uint32(q.rdt))
+	q.Reg.Write(RDT(q.ID), uint32(q.tail))
 }
 
 func (q *RxQueue) InitBuf() (uintptr, error) {

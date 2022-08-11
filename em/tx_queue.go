@@ -16,8 +16,8 @@ type TxQueue struct {
 	Reg       Reg
 	Buf       [][]byte
 	Ring      []TxDesc
-	tdh       int
-	tdt       int
+	head      int
+	tail      int
 }
 
 const TxQueueOffloadCap = ethdev.TxOffloadCapMultiSegs |
@@ -83,8 +83,8 @@ func (q *TxQueue) Tx(pkt []byte) error {
 	if err != nil {
 		return err
 	}
-	q.Buf[q.tdt] = pkt
-	desc := &q.Ring[q.tdt]
+	q.Buf[q.tail] = pkt
+	desc := &q.Ring[q.tail]
 	desc.Addr = phys
 	desc.Length = uint16(len(pkt))
 	cmd := TxCommandEOP
@@ -96,20 +96,20 @@ func (q *TxQueue) Tx(pkt []byte) error {
 	desc.Status = 0
 	desc.CSS = 0
 	desc.Special = 0
-	q.tdt = (q.tdt + 1) % q.NumDesc
-	q.Reg.Write(TDT(q.ID), uint32(q.tdt))
+	q.tail = (q.tail + 1) % q.NumDesc
+	q.Reg.Write(TDT(q.ID), uint32(q.tail))
 	return nil
 }
 
 func (q *TxQueue) Can() bool {
-	tdt := (q.tdt + 1) % q.NumDesc
-	return tdt != q.tdh
+	tail := (q.tail + 1) % q.NumDesc
+	return tail != q.head
 }
 
 func (q *TxQueue) Sync() {
-	i := q.tdh
-	q.tdh = int(q.Reg.Read(TDH(q.ID)))
-	for i != q.tdh {
+	i := q.head
+	q.head = int(q.Reg.Read(TDH(q.ID)))
+	for i != q.head {
 		hugetlb.Free(q.Buf[i])
 		q.Buf[i] = nil
 		i = (i + 1) % q.NumDesc
@@ -117,15 +117,15 @@ func (q *TxQueue) Sync() {
 }
 
 func (q *TxQueue) DiscardUnsetPackets() {
-	i := q.tdt
-	q.tdt = int(q.Reg.Read(TDT(q.ID)))
-	q.tdh = int(q.Reg.Read(TDH(q.ID)))
-	q.Reg.Write(TDT(q.ID), uint32(q.tdh))
-	for i != q.tdh {
+	i := q.tail
+	q.tail = int(q.Reg.Read(TDT(q.ID)))
+	q.head = int(q.Reg.Read(TDH(q.ID)))
+	q.Reg.Write(TDT(q.ID), uint32(q.head))
+	for i != q.head {
 		i = (i - 1) % q.NumDesc
 		hugetlb.Free(q.Buf[i])
 		q.Ring[i].Addr = ^uintptr(0)
 		q.Ring[i].Length = 0
 	}
-	q.tdt = q.tdh
+	q.tail = q.head
 }
