@@ -4,6 +4,7 @@ type Config struct {
 	LinkSpeedCap LinkSpeedCap
 	Rx           RxMode
 	Tx           TxMode
+	VNIC         bool
 }
 
 type RingThreshold struct {
