@@ -76,9 +76,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	d.SetPromisc(true)
-	d.SetAllMulticast(true)
-
 	// rxn >= 8
 	// txn >= 8
 	rxn := 32
@@ -99,6 +96,15 @@ func main() {
 	d.Start()
 	log.Println("start.")
 	defer d.Stop()
+
+	mac, err := d.GetMACAddr()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("MAC Address: %x\n", mac)
+
+	d.SetPromisc(true)
+	d.SetAllMulticast(true)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
