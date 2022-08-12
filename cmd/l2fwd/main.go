@@ -10,7 +10,8 @@ import (
 	_ "time"
 
 	"uiosample/bench"
-	"uiosample/e1000"
+	"uiosample/em"
+	"uiosample/ethdev"
 	"uiosample/hugetlb"
 	"uiosample/pci"
 )
@@ -25,7 +26,7 @@ var (
 type Device struct {
 	c      *pci.Config
 	dev    *pci.Device
-	driver *e1000.Driver
+	driver ethdev.Port
 }
 
 func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
@@ -53,17 +54,66 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 		return nil, err
 	}
 
-	// rxn >= 8
-	// txn >= 8
-	rxn := 64
-	txn := 64
-	driver, err := e1000.NewDriver(dev, rxn, txn, nil)
+	driver, err := em.AttachDriver(dev, nil)
 	if err != nil {
 		dev.Close()
 		c.Close()
 		return nil, err
 	}
-	driver.Init()
+
+	config := &ethdev.Config{
+		VNIC: true,
+	}
+	err = driver.Configure(1, 1, config)
+	if err != nil {
+		driver.Detach()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	// rxn >= 8
+	// txn >= 8
+	rxn := 64
+	txn := 64
+
+	rxconfig := &ethdev.RxConfig{
+		Threshold: ethdev.RingThreshold{
+			Prefetch: 0x20,
+			Host: 4,
+			Writeback: 4,
+		},
+	}
+	err = driver.RxQueueSetup(0, rxn, rxconfig)
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	txconfig := &ethdev.TxConfig{
+		Threshold: ethdev.RingThreshold{
+			Prefetch: 0x1f,
+			Host: 1,
+			Writeback: 1,
+		},
+	}
+	err = driver.TxQueueSetup(0, txn, txconfig)
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	driver.Start()
+
+	mac, _ := driver.GetMACAddr()
+	log.Printf("MAC Address: %x\n", mac)
+
+	driver.SetPromisc(true)
+	driver.SetAllMulticast(true)
 
 	return &Device{
 		c:      c,
@@ -73,6 +123,7 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 }
 
 func (d *Device) Close() {
+	d.driver.Close()
 	d.dev.Close()
 	d.c.Close()
 }
@@ -101,12 +152,14 @@ func main() {
 		log.Fatal(err)
 	}
 	defer dev1.Close()
+	log.Println("device 0 open.")
 
 	dev2, err := OpenDevice(1, addr2)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev2.Close()
+	log.Println("device 1 open.")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
@@ -118,19 +171,18 @@ func main() {
 	bTx1.Print()
 	bTx2.Print()
 
-	var stat1 e1000.Stat
-	dev1.driver.UpdateStat(&stat1)
-	PrintStat(&stat1)
+	//var stat1 e1000.Stat
+	//dev1.driver.UpdateStat(&stat1)
+	//PrintStat(&stat1)
 
-	var stat2 e1000.Stat
-	dev2.driver.UpdateStat(&stat2)
-
-	PrintStat(&stat2)
+	//var stat2 e1000.Stat
+	//dev2.driver.UpdateStat(&stat2)
+	//PrintStat(&stat2)
 
 	hugetlb.Stat()
 }
 
-func Serve(d1 *e1000.Driver, d2 *e1000.Driver, sig chan os.Signal) {
+func Serve(d1 ethdev.Port, d2 ethdev.Port, sig chan os.Signal) {
 	pkts := make([][]byte, 32, 32)
 	for {
 		select {
@@ -139,11 +191,11 @@ func Serve(d1 *e1000.Driver, d2 *e1000.Driver, sig chan os.Signal) {
 		default:
 		}
 		bRx1.Start()
-		n := d1.RxBurst(pkts)
+		n := d1.RxQueue(0).Do(pkts)
 		bRx1.End()
 		for off := 0; off < n; {
 			bTx2.Start()
-			m := d2.TxBurst(pkts[off:n])
+			m := d2.TxQueue(0).Do(pkts[off:n])
 			bTx2.End()
 			off += m
 			if off < n {
@@ -151,11 +203,11 @@ func Serve(d1 *e1000.Driver, d2 *e1000.Driver, sig chan os.Signal) {
 			}
 		}
 		bRx2.Start()
-		n = d2.RxBurst(pkts)
+		n = d2.RxQueue(0).Do(pkts)
 		bRx2.End()
 		for off := 0; off < n; {
 			bTx1.Start()
-			m := d1.TxBurst(pkts[off:n])
+			m := d1.TxQueue(0).Do(pkts[off:n])
 			bTx1.End()
 			off += m
 			if off < n {
@@ -165,10 +217,10 @@ func Serve(d1 *e1000.Driver, d2 *e1000.Driver, sig chan os.Signal) {
 	}
 }
 
-func PrintStat(stat *e1000.Stat) {
-	fmt.Printf("MPC : %v\n", stat.MPC)
-	fmt.Printf("GPRC: %v\n", stat.GPRC)
-	fmt.Printf("GPTC: %v\n", stat.GPTC)
-	fmt.Printf("GORC: %v\n", stat.GORC)
-	fmt.Printf("GOTC: %v\n", stat.GOTC)
-}
+//func PrintStat(stat *e1000.Stat) {
+//	fmt.Printf("MPC : %v\n", stat.MPC)
+//	fmt.Printf("GPRC: %v\n", stat.GPRC)
+//	fmt.Printf("GPTC: %v\n", stat.GPTC)
+//	fmt.Printf("GORC: %v\n", stat.GORC)
+//	fmt.Printf("GOTC: %v\n", stat.GOTC)
+//}
