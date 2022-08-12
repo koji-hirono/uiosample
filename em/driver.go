@@ -9,6 +9,11 @@ import (
 )
 
 const ETHER_TYPE_VLAN = 0x8100
+const ETHER_MAX_LEN = 1518
+const MAX_BUF_SIZE = 2048
+
+const FC_PAUSE_TIME = 0x0680
+const FCSetting = FCModeFull
 
 type Driver struct {
 	Dev    *pci.Device
@@ -59,17 +64,21 @@ func AttachDriver(dev *pci.Device, logger *log.Logger) (*Driver, error) {
 		return nil, err
 	}
 	d.HW = hw
-	err = SetupInitFuncs(hw, true)
-	if err != nil {
-		return nil, err
-	}
-	err = d.HWInit()
-	if err != nil {
-		return nil, err
-	}
-	d.link = NewLink(hw)
-	d.led = NewLED(&hw.MAC)
-	d.MAC = [][6]byte{d.HW.MAC.Addr}
+	/*
+		err = SetupInitFuncs(hw, true)
+		if err != nil {
+			return nil, err
+		}
+		err = d.HWInit()
+		if err != nil {
+			return nil, err
+		}
+		d.link = NewLink(hw)
+		d.led = NewLED(&hw.MAC)
+		d.MAC = [][6]byte{d.HW.MAC.Addr}
+	*/
+	d.link = NewLink(d.HW)
+	d.led = NewLED(&d.HW.MAC)
 
 	return d, nil
 }
@@ -106,6 +115,16 @@ func (d *Driver) Configure(nrxq, ntxq int, conf *ethdev.Config) error {
 	d.ntxq = ntxq
 	d.Config = conf
 	d.link.conf = conf
+	d.HW.VNIC = conf.VNIC
+	err := SetupInitFuncs(d.HW, true)
+	if err != nil {
+		return err
+	}
+	err = d.HWInit()
+	if err != nil {
+		return err
+	}
+	d.MAC = [][6]byte{d.HW.MAC.Addr}
 	return nil
 }
 
@@ -378,11 +397,6 @@ func (d *Driver) GetRxBufferSize() uint32 {
 	return (pba & 0xffff) << 10
 }
 
-const ETHER_MAX_LEN = 1518
-const FC_PAUSE_TIME = 0x0680
-
-const FCSetting = FCModeFull
-
 // int em_hardware_init(struct e1000_hw *hw)
 func (d *Driver) HardwareInit() error {
 	hw := d.HW
@@ -598,8 +612,6 @@ func (d *Driver) RxTxControl(enable bool) {
 	hw.RegWrite(RCTL, rctl)
 	hw.RegWriteFlush()
 }
-
-const MAX_BUF_SIZE = 16384
 
 // int eth_em_rx_init(struct rte_eth_dev *dev)
 func (d *Driver) RxInit() error {

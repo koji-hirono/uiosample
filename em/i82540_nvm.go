@@ -14,7 +14,12 @@ func (m *I82540NVM) InitParams() error {
 	nvm := &m.hw.NVM
 
 	nvm.Type = NVMTypeEepromMicrowire
-	nvm.DelayUsec = 50
+	if m.hw.VNIC {
+		// No need to wait.
+		nvm.DelayUsec = 0
+	} else {
+		nvm.DelayUsec = 50
+	}
 	nvm.OpcodeBits = 3
 
 	switch nvm.Override {

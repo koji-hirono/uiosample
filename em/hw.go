@@ -116,6 +116,7 @@ type HW struct {
 	BAR0 pci.Resource
 	BAR1 pci.Resource
 
+	VNIC bool
 	Spec interface{}
 }
 
