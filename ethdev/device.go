@@ -15,6 +15,4 @@ type DeviceInfo struct {
 	RxConfig          RxConfig
 	TxConfig          TxConfig
 	LinkSpeedCap      LinkSpeedCap
-	RxQueueNums       int
-	TxQueueNums       int
 }
