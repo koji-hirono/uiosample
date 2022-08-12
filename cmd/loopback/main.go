@@ -70,7 +70,9 @@ func main() {
 	}
 	defer d.Detach()
 
-	config := &ethdev.Config{}
+	config := &ethdev.Config{
+		VNIC: true,
+	}
 	err = d.Configure(1, 1, config)
 	if err != nil {
 		log.Fatal(err)
