@@ -50,7 +50,7 @@ func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
 	// new ether header
 	hdr, m := znet.DecodeEtherHdr(b)
 	hdr.Dst.Set(dstmac)
-	hdr.Src.Set(s.port1.driver.Mac)
+	hdr.Src.Set(s.port1.Mac())
 	hdr.Type.Set(znet.EtherTypeIPv4)
 	n += m
 

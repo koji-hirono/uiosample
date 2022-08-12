@@ -85,7 +85,7 @@ func (s *Server) procN3FAR(gtp *znet.GTPv1Hdr, ip *znet.IPv4Hdr, payload []byte)
 	// new ether header
 	hdr, m := znet.DecodeEtherHdr(b)
 	hdr.Dst.Set(dstmac)
-	hdr.Src.Set(s.port2.driver.Mac)
+	hdr.Src.Set(s.port2.Mac())
 	hdr.Type.Set(znet.EtherTypeIPv4)
 	n += m
 

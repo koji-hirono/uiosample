@@ -1,14 +1,15 @@
 package main
 
 import (
-	"uiosample/e1000"
+	"uiosample/em"
+	"uiosample/ethdev"
 	"uiosample/pci"
 )
 
 type Port struct {
 	c      *pci.Config
 	dev    *pci.Device
-	driver *e1000.Driver
+	driver ethdev.Port
 }
 
 func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
@@ -29,17 +30,51 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 		return nil, err
 	}
 
-	// rxn >= 8
-	// txn >= 8
-	rxn := 64
-	txn := 64
-	driver, err := e1000.NewDriver(dev, rxn, txn, nil)
+	driver, err := em.AttachDriver(dev, nil)
 	if err != nil {
 		dev.Close()
 		c.Close()
 		return nil, err
 	}
-	driver.Init()
+
+	config := &ethdev.Config{
+		VNIC: true,
+	}
+	err = driver.Configure(1, 1, config)
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	// rxn >= 8
+	// txn >= 8
+	rxn := 64
+	txn := 64
+
+	rxconfig := &ethdev.RxConfig{}
+	err = driver.RxQueueSetup(0, rxn, rxconfig)
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	txconfig := &ethdev.TxConfig{}
+	err = driver.TxQueueSetup(0, txn, txconfig)
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
+
+	driver.Start()
+
+	driver.SetPromisc(true)
+	driver.SetAllMulticast(true)
 
 	return &Port{
 		c:      c,
@@ -49,18 +84,20 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 }
 
 func (p *Port) Close() {
+	p.driver.Close()
 	p.dev.Close()
 	p.c.Close()
 }
 
 func (p *Port) Mac() []byte {
-	return p.driver.Mac
+	mac, _ := p.driver.GetMACAddr()
+	return mac[:]
 }
 
 func (p *Port) RxBurst(pkts [][]byte) int {
-	return p.driver.RxBurst(pkts)
+	return p.driver.RxQueue(0).Do(pkts)
 }
 
 func (p *Port) TxBurst(pkts [][]byte) int {
-	return p.driver.TxBurst(pkts)
+	return p.driver.TxQueue(0).Do(pkts)
 }

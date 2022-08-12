@@ -8,7 +8,6 @@ import (
 	"path"
 	"syscall"
 
-	"uiosample/e1000"
 	"uiosample/hugetlb"
 	"uiosample/pci"
 )
@@ -51,18 +50,18 @@ func main() {
 
 	s.Serve(sig)
 
-	var stat1 e1000.Stat
-	port1.driver.UpdateStat(&stat1)
-	PrintStat(&stat1)
+	//var stat1 e1000.Stat
+	//port1.driver.UpdateStat(&stat1)
+	//PrintStat(&stat1)
 
-	var stat2 e1000.Stat
-	port2.driver.UpdateStat(&stat2)
-
-	PrintStat(&stat2)
+	//var stat2 e1000.Stat
+	//port2.driver.UpdateStat(&stat2)
+	//PrintStat(&stat2)
 
 	hugetlb.Stat()
 }
 
+/*
 func PrintStat(stat *e1000.Stat) {
 	fmt.Printf("MPC : %v\n", stat.MPC)
 	fmt.Printf("GPRC: %v\n", stat.GPRC)
@@ -70,3 +69,4 @@ func PrintStat(stat *e1000.Stat) {
 	fmt.Printf("GORC: %v\n", stat.GORC)
 	fmt.Printf("GOTC: %v\n", stat.GOTC)
 }
+*/
