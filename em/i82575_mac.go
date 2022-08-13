@@ -97,8 +97,7 @@ func (m *I82575MAC) CheckForLink() error {
 	case MediaTypeCopper:
 		return CheckForCopperLink(m.hw)
 	default:
-		// TODO:
-		// e1000_get_pcs_speed_and_duplex_82575(hw, &speed, &duplex)
+		m.getPCSSpeedAndDuplex()
 
 		// Use this flag to determine if link needs to be checked or
 		// not.  If we have link clear the flag so that we do not
@@ -199,8 +198,7 @@ func (m *I82575MAC) GetLinkUpInfo() (uint16, uint16, error) {
 	case MediaTypeCopper:
 		return GetSpeedAndDuplexCopper(m.hw)
 	default:
-		// e1000_get_pcs_speed_and_duplex_82575
-		return 0, 0, nil
+		return m.getPCSSpeedAndDuplex()
 	}
 }
 
@@ -328,6 +326,50 @@ func (m *I82575MAC) clearVFTAI350() {
 		}
 		hw.RegWriteFlush()
 	}
+}
+
+func (m *I82575MAC) getPCSSpeedAndDuplex() (uint16, uint16, error) {
+	hw := m.hw
+	mac := &hw.MAC
+	// Read the PCS Status register for link state. For non-copper mode,
+	// the status register is not accurate. The PCS status register is
+	// used instead.
+	pcs := hw.RegRead(PCS_LSTAT)
+
+	// The link up bit determines when link is up on autoneg.
+	if pcs&PCS_LSTS_LINK_OK == 0 {
+		mac.SerdesHasLink = false
+		return 0, 0, nil
+	}
+	mac.SerdesHasLink = true
+
+	// Detect and store PCS speed
+	var speed uint16
+	if pcs&PCS_LSTS_SPEED_1000 != 0 {
+		speed = 1000
+	} else if pcs&PCS_LSTS_SPEED_100 != 0 {
+		speed = 100
+	} else {
+		speed = 10
+	}
+
+	// Detect and store PCS duplex
+	var duplex uint16
+	if pcs&PCS_LSTS_DUPLEX_FULL != 0 {
+		duplex = FULL_DUPLEX
+	} else {
+		duplex = HALF_DUPLEX
+	}
+
+	// Check if it is an I354 2.5Gb backplane connection.
+	if mac.Type == MACTypeI354 {
+		status := hw.RegRead(STATUS)
+		if status&STATUS_2P5_SKU != 0 && status&STATUS_2P5_SKU_OVER == 0 {
+			speed = 2500
+			duplex = FULL_DUPLEX
+		}
+	}
+	return speed, duplex, nil
 }
 
 func (m *I82575MAC) SGMIIActive() bool {
