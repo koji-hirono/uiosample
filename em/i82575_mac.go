@@ -260,7 +260,24 @@ func (m *I82575MAC) ShutdownSerdes() {
 }
 
 func (m *I82575MAC) PowerUpSerdes() {
-	// e1000_power_up_serdes_link_82575
+	hw := m.hw
+	if hw.PHY.MediaType != MediaTypeInternalSerdes && !m.SGMIIActive() {
+		return
+	}
+
+	// Enable PCS to turn on link
+	pcs := hw.RegRead(PCS_CFG0)
+	pcs |= PCS_CFG_PCS_EN
+	hw.RegWrite(PCS_CFG0, pcs)
+
+	// Power up the laser
+	ctrl := hw.RegRead(CTRL_EXT)
+	ctrl &^= CTRL_EXT_SDP3_DATA
+	hw.RegWrite(CTRL_EXT, ctrl)
+
+	// flush the write to verify completion
+	hw.RegWriteFlush()
+	time.Sleep(1 * time.Millisecond)
 }
 
 func (m *I82575MAC) SetupLink() error {
