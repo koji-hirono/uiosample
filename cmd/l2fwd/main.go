@@ -170,13 +170,8 @@ func main() {
 	bTx1.Print()
 	bTx2.Print()
 
-	//var stat1 e1000.Stat
-	//dev1.driver.UpdateStat(&stat1)
-	//PrintStat(&stat1)
-
-	//var stat2 e1000.Stat
-	//dev2.driver.UpdateStat(&stat2)
-	//PrintStat(&stat2)
+	PrintCounters(dev1.driver.CounterGroup())
+	PrintCounters(dev2.driver.CounterGroup())
 
 	hugetlb.Stat()
 }
@@ -216,10 +211,16 @@ func Serve(d1 ethdev.Port, d2 ethdev.Port, sig chan os.Signal) {
 	}
 }
 
-//func PrintStat(stat *e1000.Stat) {
-//	fmt.Printf("MPC : %v\n", stat.MPC)
-//	fmt.Printf("GPRC: %v\n", stat.GPRC)
-//	fmt.Printf("GPTC: %v\n", stat.GPTC)
-//	fmt.Printf("GORC: %v\n", stat.GORC)
-//	fmt.Printf("GOTC: %v\n", stat.GOTC)
-//}
+func PrintCounters(g *ethdev.CounterGroup) {
+	fmt.Printf("RxPackets: %v\n", g.RxPackets.Value())
+	fmt.Printf("TxPackets: %v\n", g.TxPackets.Value())
+	fmt.Printf("RxOctets : %v\n", g.RxOctets.Value())
+	fmt.Printf("TxOctets : %v\n", g.TxOctets.Value())
+	fmt.Printf("RxMissed : %v\n", g.RxMissed.Value())
+	fmt.Printf("RxErrors : %v\n", g.RxErrors.Value())
+	fmt.Printf("TxErrors : %v\n", g.TxErrors.Value())
+
+	for name, c := range g.Ext {
+		fmt.Printf("%s: %v\n", name, c.Value())
+	}
+}
