@@ -11,7 +11,7 @@ type CounterGroup struct {
 	RxOctets  Counter
 	TxOctets  Counter
 	RxMissed  Counter
-	Rxerrors  Counter
+	RxErrors  Counter
 	TxErrors  Counter
 	Ext       map[string]Counter
 }
