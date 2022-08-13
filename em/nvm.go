@@ -66,6 +66,16 @@ type NVMOp interface {
    s32  (*write)(struct e1000_hw *, u16, u16, u16 *);
 */
 
+const (
+	NVM_RW_REG_DATA   = 16 // Offset to data in NVM read/write regs
+	NVM_RW_REG_DONE   = 2  // Offset to READ/WRITE done bit
+	NVM_RW_REG_START  = 1  // Start operation
+	NVM_RW_ADDR_SHIFT = 2  // Shift to the address bits
+
+	NVM_POLL_WRITE = 1 // Flag for polling for write complete
+	NVM_POLL_READ  = 0 // Flag for polling for read complete
+)
+
 // NVM # attempts to gain grant
 const NVM_GRANT_ATTEMPTS = 1000
 
@@ -291,4 +301,36 @@ func ReadMACAddr(hw *HW) error {
 
 	copy(hw.MAC.Addr[:], hw.MAC.PermAddr[:])
 	return nil
+}
+
+func ReadNVMEERD(hw *HW, offset uint16, val []uint16) error {
+	for i := 0; i < len(val); i++ {
+		eerd := (int(offset) + i) << NVM_RW_ADDR_SHIFT
+		eerd += NVM_RW_REG_START
+		hw.RegWrite(EERD, uint32(eerd))
+		err := PollEERDEEWRDone(hw, NVM_POLL_READ)
+		if err != nil {
+			return err
+		}
+		val[i] = uint16(hw.RegRead(EERD) >> NVM_RW_REG_DATA)
+	}
+	return nil
+}
+
+func PollEERDEEWRDone(hw *HW, reg int) error {
+	attempts := 100000
+	var addr int
+	if reg == NVM_POLL_READ {
+		addr = EERD
+	} else {
+		addr = EEWR
+	}
+	for i := 0; i < attempts; i++ {
+		x := hw.RegRead(addr)
+		if x&NVM_RW_REG_DONE != 0 {
+			return nil
+		}
+		time.Sleep(5 * time.Microsecond)
+	}
+	return errors.New("timeout")
 }

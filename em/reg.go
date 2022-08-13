@@ -17,6 +17,9 @@ const (
 	// EEPROM/Flash Control - RW
 	EECD = 0x0010
 
+	// EEPROM Read - RW
+	EERD = 0x0014
+
 	// Extended Device Control - RW
 	CTRL_EXT = 0x0018
 
@@ -76,6 +79,9 @@ const (
 
 	// SFPI2C Command Register - RW
 	I2CCMD = 0x1028
+
+	// EEPROM Write Register - RW
+	EEWR = 0x102c
 
 	// Flow Control Receive Threshold Low - RW
 	FCRTL = 0x2160

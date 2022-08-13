@@ -95,8 +95,7 @@ func (m *I82575NVM) Acquire() error {
 func (m *I82575NVM) Read(offset uint16, val []uint16) error {
 	nvm := &m.hw.NVM
 	if nvm.WordSize < 1<<15 {
-		// e1000_read_nvm_eerd
-		return nil
+		return ReadNVMEERD(m.hw, offset, val)
 	} else {
 		return ReadNVMSpi(m.hw, offset, val)
 	}
