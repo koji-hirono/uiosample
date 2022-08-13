@@ -302,23 +302,21 @@ func (m *I82575MAC) SetOBFFTimer(uint32) error {
 	return nil
 }
 
-func (m *I82575MAC) AcquireSWFWSync(uint16) error {
+func (m *I82575MAC) AcquireSWFWSync(mask uint16) error {
 	switch m.hw.MAC.Type {
 	case MACTypeI210, MACTypeI211:
-		// e1000_acquire_swfw_sync_i210
-		return nil
+		return acquireSWFWSyncI210(m.hw, mask)
 	default:
-		// e1000_acquire_swfw_sync_82575
-		return nil
+		return acquireSWFWSync82575(m.hw, mask)
 	}
 }
 
-func (m *I82575MAC) ReleaseSWFWSync(uint16) {
+func (m *I82575MAC) ReleaseSWFWSync(mask uint16) {
 	switch m.hw.MAC.Type {
 	case MACTypeI210, MACTypeI211:
-		// e1000_release_swfw_sync_i210
+		releaseSWFWSyncI210(m.hw, mask)
 	default:
-		// e1000_release_swfw_sync_82575
+		releaseSWFWSync82575(m.hw, mask)
 	}
 }
 
@@ -514,6 +512,135 @@ func (m *I82575MAC) setSFPMediaType() error {
 		}
 	} else {
 		phy.MediaType = MediaTypeUnknown
+	}
+	return nil
+}
+
+func acquireSWFWSync82575(hw *HW, mask uint16) error {
+	swmask := uint32(mask)
+	fwmask := uint32(mask) << 16
+	timeout := 200
+	for i := 0; i < timeout; i++ {
+		err := GetHWSemaphore(hw)
+		if err != nil {
+			return err
+		}
+		swfw_sync := hw.RegRead(SW_FW_SYNC)
+		if swfw_sync&(fwmask|swmask) == 0 {
+			swfw_sync |= swmask
+			hw.RegWrite(SW_FW_SYNC, swfw_sync)
+			PutHWSemaphore(hw)
+			return nil
+		}
+		// Firmware currently using resource (fwmask)
+		// or other software thread using resource (swmask)
+		PutHWSemaphore(hw)
+		time.Sleep(5 * time.Millisecond)
+	}
+	return errors.New("SW_FW_SYNC timeout")
+}
+
+func releaseSWFWSync82575(hw *HW, mask uint16) {
+	for {
+		err := GetHWSemaphore(hw)
+		if err == nil {
+			break
+		}
+	}
+
+	swfw_sync := hw.RegRead(SW_FW_SYNC)
+	swfw_sync &^= uint32(mask)
+	hw.RegWrite(SW_FW_SYNC, swfw_sync)
+
+	PutHWSemaphore(hw)
+}
+
+func acquireSWFWSyncI210(hw *HW, mask uint16) error {
+	swmask := uint32(mask)
+	fwmask := uint32(mask) << 16
+	timeout := 200
+	for i := 0; i < timeout; i++ {
+		err := GetHWSemaphoreI210(hw)
+		if err != nil {
+			return err
+		}
+		swfw_sync := hw.RegRead(SW_FW_SYNC)
+		if swfw_sync&(fwmask|swmask) == 0 {
+			swfw_sync |= swmask
+			hw.RegWrite(SW_FW_SYNC, swfw_sync)
+			PutHWSemaphore(hw)
+			return nil
+		}
+		// Firmware currently using resource (fwmask)
+		// or other software thread using resource (swmask)
+		PutHWSemaphore(hw)
+		time.Sleep(5 * time.Millisecond)
+	}
+	return errors.New("SW_FW_SYNC timeout")
+}
+
+func releaseSWFWSyncI210(hw *HW, mask uint16) {
+	for {
+		err := GetHWSemaphoreI210(hw)
+		if err == nil {
+			break
+		}
+	}
+
+	swfw_sync := hw.RegRead(SW_FW_SYNC)
+	swfw_sync &^= uint32(mask)
+	hw.RegWrite(SW_FW_SYNC, swfw_sync)
+
+	PutHWSemaphore(hw)
+}
+
+func GetHWSemaphoreI210(hw *HW) error {
+	// Get the SW semaphore
+	timeout := int(hw.NVM.WordSize) + 1
+	var i int
+	for i < timeout {
+		swsm := hw.RegRead(SWSM)
+		if swsm&SWSM_SMBI == 0 {
+			break
+		}
+		time.Sleep(50 * time.Microsecond)
+		i++
+	}
+	if i == timeout {
+		// In rare circumstances, the SW semaphore may already be held
+		// unintentionally. Clear the semaphore once before giving up.
+		spec := hw.Spec.(*I82575DeviceSpec)
+		if spec.ClearSemaphoreOnce {
+			spec.ClearSemaphoreOnce = false
+			PutHWSemaphore(hw)
+			for i = 0; i < timeout; i++ {
+				swsm := hw.RegRead(SWSM)
+				if swsm&SWSM_SMBI == 0 {
+					break
+				}
+				time.Sleep(50 * time.Microsecond)
+			}
+		}
+		// If we do not have the semaphore here, we have to give up.
+		if i == timeout {
+			return errors.New("SMBI bit is set")
+		}
+	}
+
+	// Get the FW semaphore.
+	for i = 0; i < timeout; i++ {
+		swsm := hw.RegRead(SWSM)
+		hw.RegWrite(SWSM, swsm|SWSM_SWESMBI)
+		// Semaphore acquired if bit latched
+		if hw.RegRead(SWSM)&SWSM_SWESMBI != 0 {
+			break
+		}
+		time.Sleep(50 * time.Microsecond)
+	}
+	if i == timeout {
+		// Release semaphores
+		PutHWSemaphore(hw)
+		return errors.New("timeout")
 	}
 	return nil
 }

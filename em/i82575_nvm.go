@@ -69,11 +69,11 @@ func (m *I82575NVM) InitParams() error {
 func (m *I82575NVM) Acquire() error {
 	hw := m.hw
 
-	//err := e1000_acquire_swfw_sync_82575(hw, SWFW_EEP_SM)
-	//if err != nil {
-	//	return err
-	//}
-	//defer e1000_release_swfw_sync_82575(hw, SWFW_EEP_SM)
+	err := acquireSWFWSync82575(hw, SWFW_EEP_SM)
+	if err != nil {
+		return err
+	}
+	defer releaseSWFWSync82575(hw, SWFW_EEP_SM)
 
 	// Check if there is some access
 	// error this access may hook on
@@ -107,7 +107,7 @@ func (m *I82575NVM) Read(offset uint16, val []uint16) error {
 
 func (m *I82575NVM) Release() {
 	ReleaseNVM(m.hw)
-	// e1000_release_swfw_sync_82575(m.hw, SWFW_EEP_SM)
+	releaseSWFWSync82575(m.hw, SWFW_EEP_SM)
 }
 
 func (m *I82575NVM) Reload() {

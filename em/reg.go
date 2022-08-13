@@ -408,6 +408,9 @@ const (
 
 	// FW Semaphore
 	FWSM = 0x5b54
+
+	// SW-FW Synchronization - RW
+	SW_FW_SYNC = 0x05b5c
 )
 
 // CTRL
@@ -987,6 +990,17 @@ const (
 
 	FWSM_FW_VALID        uint32 = 0x00008000
 	FWSM_HI_EN_ONLY_MODE uint32 = 0x4
+)
+
+// SW_FW_SYNC
+const (
+	SWFW_EEP_SM    uint16 = 0x01
+	SWFW_PHY0_SM   uint16 = 0x02
+	SWFW_PHY1_SM   uint16 = 0x04
+	SWFW_CSR_SM    uint16 = 0x08
+	SWFW_PHY2_SM   uint16 = 0x20
+	SWFW_PHY3_SM   uint16 = 0x40
+	SWFW_SW_MNG_SM uint16 = 0x400
 )
 
 type Reg struct {

@@ -560,3 +560,43 @@ func CheckAltMACAddr(hw *HW) error {
 
 	return nil
 }
+
+func GetHWSemaphore(hw *HW) error {
+	// Get the SW semaphore
+	timeout := int(hw.NVM.WordSize + 1)
+	var i int
+	for i < timeout {
+		swsm := hw.RegRead(SWSM)
+		if swsm&SWSM_SMBI == 0 {
+			break
+		}
+		time.Sleep(50 * time.Microsecond)
+		i++
+	}
+	if i == timeout {
+		return errors.New("SMBI bit is set")
+	}
+
+	// Get the FW semaphore.
+	for i = 0; i < timeout; i++ {
+		swsm := hw.RegRead(SWSM)
+		hw.RegWrite(SWSM, swsm|SWSM_SWESMBI)
+		// Semaphore acquired if bit latched
+		if hw.RegRead(SWSM)&SWSM_SWESMBI != 0 {
+			break
+		}
+		time.Sleep(50 * time.Microsecond)
+	}
+	if i == timeout {
+		// Release semaphores
+		PutHWSemaphore(hw)
+		return errors.New("timeout")
+	}
+	return nil
+}
+
+func PutHWSemaphore(hw *HW) {
+	swsm := hw.RegRead(SWSM)
+	swsm &^= SWSM_SMBI | SWSM_SWESMBI
+	hw.RegWrite(SWSM, swsm)
+}
