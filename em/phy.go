@@ -732,3 +732,169 @@ func CheckDownshift(hw *HW) error {
 
 	return nil
 }
+
+func CopperLinkSetup82577(hw *HW) error {
+	phy := &hw.PHY
+	if phy.PHYType == PHYType82580 {
+		err := phy.Op.Reset()
+		if err != nil {
+			return err
+		}
+	}
+
+	// Enable CRS on Tx. This must be set for half-duplex operation.
+	data, err := phy.Op.ReadReg(I82577_CFG_REG)
+	if err != nil {
+		return err
+	}
+	data |= I82577_CFG_ASSERT_CRS_ON_TX
+
+	// Enable downshift
+	data |= I82577_CFG_ENABLE_DOWNSHIFT
+
+	err = phy.Op.WriteReg(I82577_CFG_REG, data)
+	if err != nil {
+		return err
+	}
+
+	// Set MDI/MDIX mode
+	data, err = phy.Op.ReadReg(I82577_PHY_CTRL_2)
+	if err != nil {
+		return err
+	}
+	data &^= I82577_PHY_CTRL2_MDIX_CFG_MASK
+
+	// Options:
+	//   0 - Auto (default)
+	//   1 - MDI mode
+	//   2 - MDI-X mode
+	switch phy.MDIX {
+	case 1:
+	case 2:
+		data |= I82577_PHY_CTRL2_MANUAL_MDIX
+	default:
+		data |= I82577_PHY_CTRL2_AUTO_MDI_MDIX
+	}
+	err = phy.Op.WriteReg(I82577_PHY_CTRL_2, data)
+	if err != nil {
+		return err
+	}
+
+	return SetMasterSlaveMode(hw)
+}
+
+func SetMasterSlaveMode(hw *HW) error {
+	phy := &hw.PHY
+
+	// Resolve Master/Slave mode
+	data, err := phy.Op.ReadReg(PHY_1000T_CTRL)
+	if err != nil {
+		return err
+	}
+
+	// load defaults for future use
+	if data&CR_1000T_MS_ENABLE != 0 {
+		if data&CR_1000T_MS_VALUE != 0 {
+			phy.OrigMSType = MSTypeForceMaster
+		} else {
+			phy.OrigMSType = MSTypeForceSlave
+		}
+	} else {
+		phy.OrigMSType = MSTypeAuto
+	}
+
+	switch phy.MSType {
+	case MSTypeForceMaster:
+		data |= CR_1000T_MS_ENABLE | CR_1000T_MS_VALUE
+	case MSTypeForceSlave:
+		data |= CR_1000T_MS_ENABLE
+		data &^= CR_1000T_MS_VALUE
+	case MSTypeAuto:
+		data &^= CR_1000T_MS_ENABLE
+	}
+
+	return phy.Op.WriteReg(PHY_1000T_CTRL, data)
+}
+
+func CopperLinkSetupIgp(hw *HW) error {
+	phy := &hw.PHY
+
+	err := phy.Op.Reset()
+	if err != nil {
+		return err
+	}
+
+	// Wait 100ms for MAC to configure PHY from NVM settings, to avoid
+	// timeout issues when LFS is enabled.
+	time.Sleep(100 * time.Millisecond)
+
+	// The NVM settings will configure LPLU in D3 for
+	// non-IGP1 PHYs.
+	if phy.PHYType == PHYTypeIgp {
+		// disable lplu d3 during driver init
+		err := phy.Op.SetD3LpluState(false)
+		if err != nil {
+			return err
+		}
+	}
+
+	// disable lplu d0 during driver init
+	err = phy.Op.SetD0LpluState(false)
+	if err != nil {
+		return err
+	}
+
+	// Configure mdi-mdix settings
+	data, err := phy.Op.ReadReg(IGP01E1000_PHY_PORT_CTRL)
+	if err != nil {
+		return err
+	}
+	data &^= IGP01E1000_PSCR_AUTO_MDIX
+
+	switch phy.MDIX {
+	case 1:
+		data &^= IGP01E1000_PSCR_FORCE_MDI_MDIX
+	case 2:
+		data |= IGP01E1000_PSCR_FORCE_MDI_MDIX
+	default:
+		data |= IGP01E1000_PSCR_AUTO_MDIX
+	}
+	err = phy.Op.WriteReg(IGP01E1000_PHY_PORT_CTRL, data)
+	if err != nil {
+		return err
+	}
+
+	// set auto-master slave resolution settings
+	if hw.MAC.Autoneg {
+		// when autonegotiation advertisement is only 1000Mbps then we
+		// should disable SmartSpeed and enable Auto MasterSlave
+		// resolution as hardware default.
+		if phy.AutonegAdvertised == ADVERTISE_1000_FULL {
+			// Disable SmartSpeed
+			data, err := phy.Op.ReadReg(IGP01E1000_PHY_PORT_CONFIG)
+			if err != nil {
+				return err
+			}
+
+			data &^= IGP01E1000_PSCFR_SMART_SPEED
+			err = phy.Op.WriteReg(IGP01E1000_PHY_PORT_CONFIG, data)
+			if err != nil {
+				return err
+			}
+
+			// Set auto Master/Slave resolution process
+			data, err = phy.Op.ReadReg(PHY_1000T_CTRL)
+			if err != nil {
+				return err
+			}
+
+			data &^= CR_1000T_MS_ENABLE
+			err = phy.Op.WriteReg(PHY_1000T_CTRL, data)
+			if err != nil {
+				return err
+			}
+		}
+		return SetMasterSlaveMode(hw)
+	}
+	return nil
+}
