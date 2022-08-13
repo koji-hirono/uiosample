@@ -1,5 +1,9 @@
 package em
 
+import (
+	"errors"
+)
+
 const ID_LED_DEFAULT_82575_SERDES = ID_LED_DEF1_DEF2<<12 |
 	ID_LED_DEF1_DEF2<<8 |
 	ID_LED_DEF1_DEF2<<4 |
@@ -113,21 +117,18 @@ func (m *I82575NVM) Reload() {
 func (m *I82575NVM) Update() error {
 	switch m.hw.MAC.Type {
 	case MACType82580:
-		// e1000_validate_nvm_checksum_82580
-		return nil
+		return m.updateChecksum82580()
 	case MACTypeI350:
-		// e1000_validate_nvm_checksum_i350
-		return nil
+		return m.updateChecksumI350()
 	default:
 		return UpdateNVMChecksum(m.hw)
 	}
 }
 
 func (m *I82575NVM) ValidLEDDefault() (uint16, error) {
-	nvm := &m.hw.NVM
 	phy := &m.hw.PHY
 	var data [1]uint16
-	err := nvm.Op.Read(NVM_ID_LED_SETTINGS, data[:])
+	err := m.Read(NVM_ID_LED_SETTINGS, data[:])
 	if err != nil {
 		return 0, err
 	}
@@ -145,11 +146,9 @@ func (m *I82575NVM) ValidLEDDefault() (uint16, error) {
 func (m *I82575NVM) Validate() error {
 	switch m.hw.MAC.Type {
 	case MACType82580:
-		// e1000_validate_nvm_checksum_82580
-		return nil
+		return m.validateChecksum82580()
 	case MACTypeI350:
-		// e1000_validate_nvm_checksum_i350
-		return nil
+		return m.validateChecksumI350()
 	default:
 		return ValidateNVMChecksum(m.hw)
 	}
@@ -157,4 +156,102 @@ func (m *I82575NVM) Validate() error {
 
 func (m *I82575NVM) Write(offset uint16, val []uint16) error {
 	return WriteNVMSpi(m.hw, offset, val)
+}
+
+func (m *I82575NVM) updateChecksum82580() error {
+	var data [1]uint16
+	err := m.Read(NVM_COMPATIBILITY_REG_3, data[:])
+	if err != nil {
+		return err
+	}
+	if data[0]&NVM_COMPATIBILITY_BIT_MASK == 0 {
+		// set compatibility bit to validate checksums appropriately */
+		data[0] |= NVM_COMPATIBILITY_BIT_MASK
+		err := m.Write(NVM_COMPATIBILITY_REG_3, data[:])
+		if err != nil {
+			return err
+		}
+	}
+	for i := 0; i < 4; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := m.updateChecksumWithOffset(offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *I82575NVM) updateChecksumI350() error {
+	for i := 0; i < 4; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := m.updateChecksumWithOffset(offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *I82575NVM) updateChecksumWithOffset(offset uint16) error {
+	var checksum uint16
+	var data [1]uint16
+	for i := offset; i < NVM_CHECKSUM_REG+offset; i++ {
+		err := m.Read(i, data[:])
+		if err != nil {
+			return err
+		}
+		checksum += data[0]
+	}
+	data[0] = NVM_SUM - checksum
+	return m.Write(NVM_CHECKSUM_REG+offset, data[:])
+}
+
+func (m *I82575NVM) validateChecksum82580() error {
+	var data [1]uint16
+	err := m.Read(NVM_COMPATIBILITY_REG_3, data[:])
+	if err != nil {
+		return err
+	}
+	n := 1
+	if data[0]&NVM_COMPATIBILITY_BIT_MASK != 0 {
+		// if chekcsums compatibility bit is set validate checksums
+		// for all 4 ports.
+		n = 4
+	}
+	for i := 0; i < n; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := m.validateChecksumWithOffset(offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *I82575NVM) validateChecksumI350() error {
+	for i := 0; i < 4; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := m.validateChecksumWithOffset(offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *I82575NVM) validateChecksumWithOffset(offset uint16) error {
+	var checksum uint16
+	for i := offset; i < NVM_CHECKSUM_REG+offset+1; i++ {
+		var data [1]uint16
+		err := m.Read(i, data[:])
+		if err != nil {
+			return err
+		}
+		checksum += data[0]
+	}
+	if checksum != NVM_SUM {
+		return errors.New("NVM Checksum Invalid")
+	}
+	return nil
 }
