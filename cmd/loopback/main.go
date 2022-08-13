@@ -105,8 +105,7 @@ func main() {
 	}
 	log.Printf("MAC Address: %x\n", mac)
 
-	d.SetPromisc(true)
-	d.SetAllMulticast(true)
+	d.SetPromisc(true, true)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)

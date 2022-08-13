@@ -112,8 +112,7 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 	mac, _ := driver.GetMACAddr()
 	log.Printf("MAC Address: %x\n", mac)
 
-	driver.SetPromisc(true)
-	driver.SetAllMulticast(true)
+	driver.SetPromisc(true, true)
 
 	return &Device{
 		c:      c,

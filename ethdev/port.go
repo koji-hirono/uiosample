@@ -11,8 +11,7 @@ type Port interface {
 	Start() error
 	Stop() error
 	Reset() error
-	SetPromisc(enable bool) error
-	SetAllMulticast(enable bool) error
+	SetPromisc(unicast, multicast bool) error
 	GetMACAddr() ([6]byte, error)
 	CounterGroup() *CounterGroup
 	LED() LED

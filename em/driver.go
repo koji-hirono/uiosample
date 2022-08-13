@@ -345,24 +345,16 @@ func (d *Driver) Reset() error {
 
 // int eth_em_promiscuous_enable(struct rte_eth_dev *dev)
 // int eth_em_promiscuous_disable(struct rte_eth_dev *dev)
-func (d *Driver) SetPromisc(enable bool) error {
+// int eth_em_allmulticast_enable(struct rte_eth_dev *dev)
+// int eth_em_allmulticast_disable(struct rte_eth_dev *dev)
+func (d *Driver) SetPromisc(unicast, multicast bool) error {
 	x := d.HW.RegRead(RCTL)
-	if enable {
+	if unicast {
 		x |= RCTL_UPE
 	} else {
 		x &^= RCTL_UPE
-		// XXX: ?
-		x &^= RCTL_SBP
 	}
-	d.HW.RegWrite(RCTL, x)
-	return nil
-}
-
-// int eth_em_allmulticast_enable(struct rte_eth_dev *dev)
-// int eth_em_allmulticast_disable(struct rte_eth_dev *dev)
-func (d *Driver) SetAllMulticast(enable bool) error {
-	x := d.HW.RegRead(RCTL)
-	if enable {
+	if multicast {
 		x |= RCTL_MPE
 	} else {
 		x &^= RCTL_MPE

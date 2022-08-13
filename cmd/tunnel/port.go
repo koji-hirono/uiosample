@@ -73,8 +73,7 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 
 	driver.Start()
 
-	driver.SetPromisc(true)
-	driver.SetAllMulticast(true)
+	driver.SetPromisc(true, true)
 
 	return &Port{
 		c:      c,
