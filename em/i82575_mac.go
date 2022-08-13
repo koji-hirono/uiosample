@@ -31,7 +31,7 @@ func (m *I82575MAC) InitParams() error {
 	spec := m.hw.Spec.(I82575DeviceSpec)
 
 	// Derives media type
-	// e1000_get_media_type_82575(hw)
+	m.getMediaType()
 
 	// Set MTA register count
 	mac.MTARegCount = 128
@@ -84,8 +84,7 @@ func (m *I82575MAC) IDLEDInit() error {
 }
 
 func (m *I82575MAC) BlinkLED() error {
-	// e1000_blink_led_generic
-	return nil
+	return BlinkLED(m.hw)
 }
 
 func (m *I82575MAC) CheckMngMode() bool {
@@ -364,29 +363,157 @@ func (m *I82575MAC) setupCopperLink() error {
 	case PHYTypeI210, PHYTypeM88:
 		switch m.hw.PHY.ID {
 		case I347AT4_E_PHY_ID, M88E1112_E_PHY_ID, M88E1340M_E_PHY_ID, M88E1543_E_PHY_ID, M88E1512_E_PHY_ID, I210_I_PHY_ID:
-			//err := CopperLinkSetupM88gen2(m.hw)
-			//if err != nil {
-			//	return err
-			//}
+			err := CopperLinkSetupM88gen2(m.hw)
+			if err != nil {
+				return err
+			}
 		default:
-			//err := CopperLinkSetupM88(m.hw)
-			//if err != nil {
-			//	return err
-			//}
+			err := CopperLinkSetupM88(m.hw)
+			if err != nil {
+				return err
+			}
 		}
 	case PHYTypeIgp3:
-		//err := CopperLinkSetupIgp(m.hw)
-		//if err != nil {
-		//	return err
-		//}
+		err := CopperLinkSetupIgp(m.hw)
+		if err != nil {
+			return err
+		}
 	case PHYType82580:
-		//err := CopperLinkSetup82577(m.hw)
-		//if err != nil {
-		//	return err
-		//}
+		err := CopperLinkSetup82577(m.hw)
+		if err != nil {
+			return err
+		}
 	default:
 		return errors.New("invalid phy type")
 	}
 
 	return SetupCopperLink(m.hw)
+}
+
+func (m *I82575MAC) getMediaType() error {
+	hw := m.hw
+	phy := &hw.PHY
+	spec := hw.Spec.(I82575DeviceSpec)
+
+	// Set internal phy as default
+	spec.SGMIIActive = false
+	spec.ModulePlugged = false
+
+	// Get CSR setting
+	ctrl := hw.RegRead(CTRL_EXT)
+
+	// extract link mode setting
+	linkmode := ctrl & CTRL_EXT_LINK_MODE_MASK
+
+	switch linkmode {
+	case CTRL_EXT_LINK_MODE_1000BASE_KX:
+		phy.MediaType = MediaTypeInternalSerdes
+	case CTRL_EXT_LINK_MODE_GMII:
+		phy.MediaType = MediaTypeCopper
+	case CTRL_EXT_LINK_MODE_SGMII:
+		// Get phy control interface type set (MDIO vs. I2C)
+		if m.SGMIIUsesMDIO() {
+			phy.MediaType = MediaTypeCopper
+			spec.SGMIIActive = true
+			break
+		}
+		// Fall through for I2C based SGMII
+		fallthrough
+	case CTRL_EXT_LINK_MODE_PCIE_SERDES:
+		// read media type from SFP EEPROM
+		err := m.setSFPMediaType()
+		if err != nil || phy.MediaType == MediaTypeUnknown {
+			// If media type was not identified then return media
+			// type defined by the CTRL_EXT settings.
+			phy.MediaType = MediaTypeInternalSerdes
+			if linkmode == CTRL_EXT_LINK_MODE_SGMII {
+				phy.MediaType = MediaTypeCopper
+				spec.SGMIIActive = true
+			}
+			break
+		}
+		// do not change link mode for 100BaseFX
+		if spec.Ethflags&SFPFlags100BaseFX != 0 {
+			break
+		}
+
+		// change current link mode setting
+		ctrl &^= CTRL_EXT_LINK_MODE_MASK
+		if phy.MediaType == MediaTypeCopper {
+			ctrl |= CTRL_EXT_LINK_MODE_SGMII
+		} else {
+			ctrl |= CTRL_EXT_LINK_MODE_PCIE_SERDES
+		}
+		hw.RegWrite(CTRL_EXT, ctrl)
+	}
+
+	return nil
+}
+
+func (m *I82575MAC) SGMIIUsesMDIO() bool {
+	hw := m.hw
+	switch hw.MAC.Type {
+	case MACType82575, MACType82576:
+		x := hw.RegRead(MDIC)
+		return x&MDIC_DEST != 0
+	case MACType82580, MACTypeI350, MACTypeI354, MACTypeI210, MACTypeI211:
+		x := hw.RegRead(MDICNFG)
+		return x&MDICNFG_EXT_MDIO != 0
+	default:
+		return false
+	}
+}
+
+func (m *I82575MAC) setSFPMediaType() error {
+	hw := m.hw
+	phy := &hw.PHY
+	spec := hw.Spec.(I82575DeviceSpec)
+
+	// Turn I2C interface ON and power on sfp cage
+	ctrl := hw.RegRead(CTRL_EXT)
+	ctrl &^= CTRL_EXT_SDP3_DATA
+	hw.RegWrite(CTRL_EXT, ctrl|CTRL_I2C_ENA)
+	hw.RegWriteFlush()
+	defer hw.RegWrite(CTRL_EXT, ctrl)
+
+	// Read SFP module data
+	var tranceiver_type uint8
+	timeout := 3
+	for timeout > 0 {
+		data, err := ReadSFPDataByte(hw, I2CCMD_SFP_DATA_ADDR(SFF_IDENTIFIER_OFFSET))
+		if err == nil {
+			tranceiver_type = data
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+		timeout--
+	}
+	if timeout == 0 {
+		return errors.New("timeout")
+	}
+
+	flags, err := ReadSFPDataByte(hw, I2CCMD_SFP_DATA_ADDR(SFF_ETH_FLAGS_OFFSET))
+	if err != nil {
+		return err
+	}
+	spec.Ethflags = SFPFlags(flags)
+
+	// Check if there is some SFP module plugged and powered
+	if tranceiver_type == SFF_IDENTIFIER_SFP || tranceiver_type == SFF_IDENTIFIER_SFF {
+		spec.ModulePlugged = true
+		if spec.Ethflags&SFPFlags1000BaseLX != 0 || spec.Ethflags&SFPFlags1000BaseSX != 0 {
+			phy.MediaType = MediaTypeInternalSerdes
+		} else if spec.Ethflags&SFPFlags100BaseFX != 0 {
+			spec.SGMIIActive = true
+			phy.MediaType = MediaTypeInternalSerdes
+		} else if spec.Ethflags&SFPFlags1000BaseT != 0 {
+			spec.SGMIIActive = true
+			phy.MediaType = MediaTypeCopper
+		} else {
+			phy.MediaType = MediaTypeUnknown
+		}
+	} else {
+		phy.MediaType = MediaTypeUnknown
+	}
+	return nil
 }
