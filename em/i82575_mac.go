@@ -12,6 +12,9 @@ const (
 	RAR_ENTRIES_I350  = 32
 )
 
+const SW_SYNCH_MB uint16 = 0x0100
+const STAT_DEV_RST_SET uint32 = 0x00100000
+
 type I82575MAC struct {
 	hw  *HW
 	nvm *I82575NVM
@@ -369,6 +372,102 @@ func (m *I82575MAC) getPCSSpeedAndDuplex() (uint16, uint16, error) {
 }
 
 func (m *I82575MAC) resetHW82580() error {
+	hw := m.hw
+	spec := hw.Spec.(*I82575DeviceSpec)
+
+	global_device_reset := spec.GlobalDeviceReset
+	spec.GlobalDeviceReset = false
+
+	// 82580 does not reliably do global_device_reset due to hw errata
+	if hw.MAC.Type == MACType82580 {
+		global_device_reset = false
+	}
+
+	// Get current control state.
+	ctrl := hw.RegRead(CTRL)
+
+	// Prevent the PCI-E bus from sticking if there is no TLP connection
+	// on the last TLP read/write transaction when MAC is reset.
+	DisablePCIEMaster(hw)
+
+	hw.RegWrite(IMC, ^uint32(0))
+	hw.RegWrite(RCTL, 0)
+	hw.RegWrite(TCTL, TCTL_PSP)
+	hw.RegWriteFlush()
+
+	time.Sleep(10 * time.Millisecond)
+
+	// BH SW mailbox bit in SW_FW_SYNC
+	swmbsw_mask := SW_SYNCH_MB
+	// Determine whether or not a global dev reset is requested
+	if global_device_reset && m.AcquireSWFWSync(swmbsw_mask) != nil {
+		global_device_reset = false
+	}
+
+	if global_device_reset && hw.RegRead(STATUS)&STAT_DEV_RST_SET == 0 {
+		ctrl |= CTRL_DEV_RST
+	} else {
+		ctrl |= CTRL_RST
+	}
+	hw.RegWrite(CTRL, ctrl)
+
+	switch hw.DeviceID {
+	case DEV_ID_DH89XXCC_SGMII:
+	default:
+		hw.RegWriteFlush()
+	}
+
+	// Add delay to insure DEV_RST or RST has time to complete
+	time.Sleep(5 * time.Millisecond)
+
+	// When auto config read does not complete, do not
+	// return with an error. This can happen in situations
+	// where there is no eeprom and prevents getting link.
+	GetAutoRDDone(hw)
+
+	// clear global device reset status bit
+	hw.RegWrite(STATUS, STAT_DEV_RST_SET)
+
+	// Clear any pending interrupt events.
+	hw.RegWrite(IMC, ^uint32(0))
+	hw.RegRead(ICR)
+
+	m.resetMDIConfig82580()
+
+	// Install any alternate MAC address into RAR0
+	err := CheckAltMACAddr(hw)
+
+	// Release semaphore
+	if global_device_reset {
+		m.ReleaseSWFWSync(swmbsw_mask)
+	}
+
+	return err
+}
+
+func (m *I82575MAC) resetMDIConfig82580() error {
+	hw := m.hw
+	if hw.MAC.Type != MACType82580 {
+		return nil
+	}
+	if !m.SGMIIActive() {
+		return nil
+	}
+
+	var data [1]uint16
+	err := hw.NVM.Op.Read(NVM_INIT_CONTROL3_PORT_A+NVM_82580_LAN_FUNC_OFFSET(hw.Bus.Func), data[:])
+	if err != nil {
+		return err
+	}
+
+	mdicnfg := hw.RegRead(MDICNFG)
+	if data[0]&NVM_WORD24_EXT_MDIO != 0 {
+		mdicnfg |= MDICNFG_EXT_MDIO
+	}
+	if data[0]&NVM_WORD24_COM_MDIO != 0 {
+		mdicnfg |= MDICNFG_COM_MDIO
+	}
+	hw.RegWrite(MDICNFG, mdicnfg)
 	return nil
 }
 

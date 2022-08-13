@@ -96,3 +96,14 @@ func NVM_82580_LAN_FUNC_OFFSET(n uint16) uint16 {
 		return 0
 	}
 }
+
+// Mask bits for fields in Word 0x24 of the NVM
+const (
+	NVM_WORD24_COM_MDIO uint16 = 0x0008 // MDIO interface shared
+	NVM_WORD24_EXT_MDIO uint16 = 0x0004 // MDIO accesses routed extrnl
+
+	// Offset of Link Mode bits for 82575/82576
+	NVM_WORD24_LNK_MODE_OFFSET = 8
+	// Offset of Link Mode bits for 82580 up
+	NVM_WORD24_82580_LNK_MODE_OFFSET = 4
+)
