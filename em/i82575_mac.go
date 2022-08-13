@@ -235,7 +235,28 @@ func (m *I82575MAC) InitHW() error {
 }
 
 func (m *I82575MAC) ShutdownSerdes() {
-	// e1000_shutdown_serdes_link_82575
+	hw := m.hw
+	if hw.PHY.MediaType != MediaTypeInternalSerdes && !m.SGMIIActive() {
+		return
+	}
+
+	if EnableManagePT(hw) {
+		return
+	}
+
+	// Disable PCS to turn off link
+	pcs := hw.RegRead(PCS_CFG0)
+	pcs &^= PCS_CFG_PCS_EN
+	hw.RegWrite(PCS_CFG0, pcs)
+
+	// shutdown the laser
+	ctrl := hw.RegRead(CTRL_EXT)
+	ctrl |= CTRL_EXT_SDP3_DATA
+	hw.RegWrite(CTRL_EXT, ctrl)
+
+	// flush the write to verify completion
+	hw.RegWriteFlush()
+	time.Sleep(1 * time.Millisecond)
 }
 
 func (m *I82575MAC) PowerUpSerdes() {
