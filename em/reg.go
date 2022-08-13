@@ -492,6 +492,22 @@ const (
 	// NVM Addressing bits based on type 0=small, 1=large
 	EECD_ADDR_BITS uint32 = 0x00000400
 	EECD_TYPE      uint32 = 0x00002000 // NVM Type (1-SPI, 0-Microwire)
+
+	EECD_AUTO_RD      uint32 = 0x00000200 // NVM Auto Read done
+	EECD_SIZE_EX_MASK uint32 = 0x00007800 // NVM Size
+
+	EECD_SIZE_EX_SHIFT = 11
+
+	EECD_FLUPD   uint32 = 0x00080000 // Update FLASH
+	EECD_AUPDEN  uint32 = 0x00100000 // Ena Auto FLASH update
+	EECD_SEC1VAL uint32 = 0x00400000 // Sector One Valid
+
+	EECD_SEC1VAL_VALID_MASK = EECD_AUTO_RD | EECD_PRES
+
+	EECD_FLUPD_I210          uint32 = 0x00800000 // Update FLASH
+	EECD_FLUDONE_I210        uint32 = 0x04000000 // Update FLASH done
+	EECD_FLASH_DETECTED_I210 uint32 = 0x00080000 // FLASH detected
+	EECD_SEC1VAL_I210        uint32 = 0x02000000 // Sector One Valid
 )
 
 // CTRL_EXT
