@@ -58,22 +58,22 @@ const (
 
 // NVM Commands - Microwire
 const (
-	NVM_READ_OPCODE_MICROWIRE  = 0x6  // NVM read opcode
-	NVM_WRITE_OPCODE_MICROWIRE = 0x5  // NVM write opcode
-	NVM_ERASE_OPCODE_MICROWIRE = 0x7  // NVM erase opcode
-	NVM_EWEN_OPCODE_MICROWIRE  = 0x13 // NVM erase/write enable
-	NVM_EWDS_OPCODE_MICROWIRE  = 0x10 // NVM erase/write disable
+	NVM_READ_OPCODE_MICROWIRE  uint16 = 0x6  // NVM read opcode
+	NVM_WRITE_OPCODE_MICROWIRE uint16 = 0x5  // NVM write opcode
+	NVM_ERASE_OPCODE_MICROWIRE uint16 = 0x7  // NVM erase opcode
+	NVM_EWEN_OPCODE_MICROWIRE  uint16 = 0x13 // NVM erase/write enable
+	NVM_EWDS_OPCODE_MICROWIRE  uint16 = 0x10 // NVM erase/write disable
 )
 
 // NVM Commands - SPI
 const (
 	NVM_MAX_RETRY_SPI = 5000 // Max wait of 5ms, for RDY signal
 
-	NVM_READ_OPCODE_SPI  = 0x03 // NVM read opcode
-	NVM_WRITE_OPCODE_SPI = 0x02 // NVM write opcode
-	NVM_A8_OPCODE_SPI    = 0x08 // opcode bit-3 = address bit-8
-	NVM_WREN_OPCODE_SPI  = 0x06 // NVM set Write Enable latch
-	NVM_RDSR_OPCODE_SPI  = 0x05 // NVM read Status register
+	NVM_READ_OPCODE_SPI  uint16 = 0x03 // NVM read opcode
+	NVM_WRITE_OPCODE_SPI uint16 = 0x02 // NVM write opcode
+	NVM_A8_OPCODE_SPI    uint16 = 0x08 // opcode bit-3 = address bit-8
+	NVM_WREN_OPCODE_SPI  uint16 = 0x06 // NVM set Write Enable latch
+	NVM_RDSR_OPCODE_SPI  uint16 = 0x05 // NVM read Status register
 )
 
 // SPI NVM Status Register
