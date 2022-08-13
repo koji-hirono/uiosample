@@ -65,11 +65,17 @@ const (
 	// LED Control - RW
 	LEDCTL = 0x0e00
 
+	// MDI Config - RW
+	MDICNFG = 0x0e04
+
 	// TX corrupted data
 	IOSFPC = 0x0f28
 
 	// Packet Buffer Allocation - RW
 	PBA = 0x1000
+
+	// SFPI2C Command Register - RW
+	I2CCMD = 0x1028
 
 	// Flow Control Receive Threshold Low - RW
 	FCRTL = 0x2160
@@ -654,6 +660,26 @@ const (
 	LEDCTL_MODE_LINK_UP uint32 = 0x2
 	LEDCTL_MODE_LED_ON  uint32 = 0xe
 	LEDCTL_MODE_LED_OFF uint32 = 0xf
+)
+
+// MDICNFG
+const (
+	MDICNFG_EXT_MDIO uint32 = 0x80000000 // MDI ext/int destination
+	MDICNFG_COM_MDIO uint32 = 0x40000000 // MDI shared w/ lan 0
+	MDICNFG_PHY_MASK uint32 = 0x03E00000
+
+	MDICNFG_PHY_SHIFT = 21
+)
+
+// I2CCMD
+const (
+	I2CCMD_OPCODE_READ  uint32 = 0x08000000
+	I2CCMD_OPCODE_WRITE uint32 = 0x00000000
+	I2CCMD_READY        uint32 = 0x20000000
+	I2CCMD_ERROR        uint32 = 0x80000000
+
+	I2CCMD_REG_ADDR_SHIFT = 16
+	I2CCMD_PHY_ADDR_SHIFT = 24
 )
 
 // Flow Control
