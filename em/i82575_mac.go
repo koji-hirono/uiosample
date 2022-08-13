@@ -216,22 +216,18 @@ func (m *I82575MAC) UpdateMCAddrList(addrs [][6]byte) {
 
 func (m *I82575MAC) ResetHW() error {
 	if m.hw.MAC.Type >= MACType82580 {
-		// e1000_reset_hw_82580
-		return nil
+		return m.resetHW82580()
 	} else {
-		// e1000_reset_hw_82575
-		return nil
+		return m.resetHW82575()
 	}
 }
 
 func (m *I82575MAC) InitHW() error {
 	switch m.hw.MAC.Type {
 	case MACTypeI210, MACTypeI211:
-		// e1000_init_hw_i210
-		return nil
+		return m.initHWI210()
 	default:
-		// e1000_init_hw_82575
-		return nil
+		return m.initHW82575()
 	}
 }
 
@@ -263,7 +259,7 @@ func (m *I82575MAC) SetupLED() error {
 func (m *I82575MAC) WriteVFTA(offset, val uint32) {
 	switch m.hw.MAC.Type {
 	case MACTypeI350, MACTypeI354:
-		//WriteVFTAI350(m.hw, offset, val)
+		m.writeVFTAI350(offset, val)
 	default:
 		WriteVFTA(m.hw, offset, val)
 	}
@@ -370,6 +366,144 @@ func (m *I82575MAC) getPCSSpeedAndDuplex() (uint16, uint16, error) {
 		}
 	}
 	return speed, duplex, nil
+}
+
+func (m *I82575MAC) resetHW82580() error {
+	return nil
+}
+
+func (m *I82575MAC) resetHW82575() error {
+	hw := m.hw
+	// Prevent the PCI-E bus from sticking if there is no TLP connection
+	// on the last TLP read/write transaction when MAC is reset.
+	DisablePCIEMaster(hw)
+
+	// set the completion timeout for interface
+	m.setPCIECompletionTimeout()
+
+	hw.RegWrite(IMC, ^uint32(0))
+
+	hw.RegWrite(RCTL, 0)
+	hw.RegWrite(TCTL, TCTL_PSP)
+	hw.RegWriteFlush()
+
+	time.Sleep(10 * time.Millisecond)
+
+	ctrl := hw.RegRead(CTRL)
+	hw.RegWrite(CTRL, ctrl|CTRL_RST)
+
+	// When auto config read does not complete, do not
+	// return with an error. This can happen in situations
+	// where there is no eeprom and prevents getting link.
+	GetAutoRDDone(hw)
+
+	// If EEPROM is not present, run manual init scripts
+	if hw.RegRead(EECD)&EECD_PRES == 0 {
+		m.resetInitScript()
+	}
+
+	// Clear any pending interrupt events.
+	hw.RegWrite(IMC, ^uint32(0))
+	hw.RegRead(ICR)
+
+	// Install any alternate MAC address into RAR0
+	return CheckAltMACAddr(hw)
+}
+
+func (m *I82575MAC) setPCIECompletionTimeout() error {
+	hw := m.hw
+	gcr := hw.RegRead(GCR)
+	defer func() {
+		// disable completion timeout resend
+		gcr &^= GCR_CMPL_TMOUT_RESEND
+		hw.RegWrite(GCR, gcr)
+	}()
+
+	// only take action if timeout value is defaulted to 0
+	if gcr&GCR_CMPL_TMOUT_MASK != 0 {
+		return nil
+	}
+
+	// if capababilities version is type 1 we can write the
+	// timeout of 10ms to 200ms through the GCR register
+	if gcr&GCR_CAP_VER2 == 0 {
+		gcr |= GCR_CMPL_TMOUT_10ms
+		return nil
+	}
+
+	// for version 2 capabilities we need to write the config space
+	// directly in order to set the completion timeout value for
+	// 16ms to 55ms
+	devctl, err := ReadPCIECapReg(hw, PCIE_DEVICE_CONTROL2)
+	if err != nil {
+		return err
+	}
+	devctl |= PCIE_DEVICE_CONTROL2_16ms
+	return WritePCIECapReg(hw, PCIE_DEVICE_CONTROL2, devctl)
+}
+
+func (m *I82575MAC) resetInitScript() error {
+	hw := m.hw
+	if hw.MAC.Type != MACType82575 {
+		return nil
+	}
+	// SerDes configuration via SERDESCTRL
+	Write8bitCtrlReg(hw, SCTL, 0x00, 0x0c)
+	Write8bitCtrlReg(hw, SCTL, 0x01, 0x78)
+	Write8bitCtrlReg(hw, SCTL, 0x1b, 0x23)
+	Write8bitCtrlReg(hw, SCTL, 0x23, 0x15)
+
+	// CCM configuration via CCMCTL register
+	Write8bitCtrlReg(hw, CCMCTL, 0x14, 0x00)
+	Write8bitCtrlReg(hw, CCMCTL, 0x10, 0x00)
+
+	// PCIe lanes configuration
+	Write8bitCtrlReg(hw, GIOCTL, 0x00, 0xec)
+	Write8bitCtrlReg(hw, GIOCTL, 0x61, 0xdf)
+	Write8bitCtrlReg(hw, GIOCTL, 0x34, 0x05)
+	Write8bitCtrlReg(hw, GIOCTL, 0x2f, 0x81)
+
+	// PCIe PLL Configuration
+	Write8bitCtrlReg(hw, SCCTL, 0x02, 0x47)
+	Write8bitCtrlReg(hw, SCCTL, 0x14, 0x00)
+	Write8bitCtrlReg(hw, SCCTL, 0x10, 0x00)
+
+	return nil
+}
+
+func (m *I82575MAC) initHWI210() error {
+	return nil
+}
+
+func (m *I82575MAC) initHW82575() error {
+	// Initialize identification LED
+	// This is not fatal and we should not stop init due to this
+	m.IDLEDInit()
+
+	// Disabling VLAN filtering
+	m.ClearVFTA()
+
+	err := InitHWBase(m.hw)
+
+	// Set the default MTU size
+	spec := m.hw.Spec.(*I82575DeviceSpec)
+	spec.MTU = 1500
+
+	// Clear all of the statistics registers (clear on read).  It is
+	// important that we do this after we have tried to establish link
+	// because the symbol error count will increment wildly if there
+	// is no link.
+	m.ClearHWCounters()
+
+	return err
+}
+
+func (m *I82575MAC) writeVFTAI350(offset, val uint32) {
+	hw := m.hw
+	for i := 0; i < 10; i++ {
+		hw.RegWrite(VFTA+int(offset<<2), val)
+	}
+	hw.RegWriteFlush()
 }
 
 func (m *I82575MAC) SGMIIActive() bool {

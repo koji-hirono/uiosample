@@ -57,13 +57,52 @@ type BusInfo struct {
 	PCICmdWord uint16
 }
 
+// PCI/PCI-X/PCI-EX Config space
 const (
-	PCIE_LINK_STATUS      = 0x12
-	PCIE_LINK_WIDTH_MASK  = 0x3f0
+	PCI_HEADER_TYPE_REGISTER = 0x0e
+
+	PCIE_LINK_STATUS     = 0x12
+	PCIE_DEVICE_CONTROL2 = 0x28
+
+	PCIX_COMMAND_REGISTER   = 0xe6
+	PCIX_STATUS_REGISTER_LO = 0xe8
+	PCIX_STATUS_REGISTER_HI = 0xea
+)
+
+// PCI_HEADER_TYPE
+const (
+	PCI_HEADER_TYPE_MULTIFUNC = 0x80
+)
+
+// PCIE_LINK
+const (
+	PCIE_LINK_WIDTH_MASK = 0x3f0
+
 	PCIE_LINK_WIDTH_SHIFT = 4
-	PCIE_LINK_SPEED_MASK  = 0x0f
-	PCIE_LINK_SPEED_2500  = 0x01
-	PCIE_LINK_SPEED_5000  = 0x02
+
+	PCIE_LINK_SPEED_MASK = 0x0f
+	PCIE_LINK_SPEED_2500 = 0x01
+	PCIE_LINK_SPEED_5000 = 0x02
+)
+
+// PCIE_DEVICE_CONTROL2
+const (
+	PCIE_DEVICE_CONTROL2_16ms = 0x0005
+)
+
+// PCIX_COMMAND
+const (
+	PCIX_COMMAND_MMRBC_MASK  = 0x000c
+	PCIX_COMMAND_MMRBC_SHIFT = 0x2
+)
+
+// PCIX_STATUS
+const (
+	PCIX_STATUS_HI_MMRBC_MASK  = 0x0060
+	PCIX_STATUS_HI_MMRBC_SHIFT = 0x5
+	PCIX_STATUS_HI_MMRBC_4K    = 0x3
+	PCIX_STATUS_HI_MMRBC_2K    = 0x2
+	PCIX_STATUS_LO_FUNC_MASK   = 0x7
 )
 
 func GetBusInfoPCI(hw *HW) error {
@@ -143,6 +182,23 @@ func SetLANIDMultiPortPCI(hw *HW) {
 	bus.Func = 0
 }
 
+func WritePCICfg(hw *HW, reg uint32, value uint16) {
+}
+
+func ReadPCICfg(hw *HW, reg uint32) uint16 {
+	return 0
+}
+
+func PCISetMWI(hw *HW) {
+}
+
+func PCIClearMWI(hw *HW) {
+}
+
 func ReadPCIECapReg(hw *HW, reg uint32) (uint16, error) {
 	return 0, errors.New("not implemented")
+}
+
+func WritePCIECapReg(hw *HW, reg uint32, value uint16) error {
+	return errors.New("not implemented")
 }

@@ -199,3 +199,31 @@ func SetupInitFuncs(hw *HW, initdev bool) error {
 	}
 	return nil
 }
+
+func InitHWBase(hw *HW) error {
+	mac := &hw.MAC
+
+	// Setup the receive address
+	InitRxAddrs(hw, int(mac.RAREntryCount))
+
+	// Zero out the Multicast HASH table
+	for i := 0; i < int(mac.MTARegCount); i++ {
+		hw.RegWrite(MTA+(i<<2), 0)
+	}
+
+	// Zero out the Unicast HASH table
+	for i := 0; i < int(mac.UTARegCount); i++ {
+		hw.RegWrite(UTA+(i<<2), 0)
+	}
+
+	// Setup link and flow control
+	err := mac.Op.SetupLink()
+
+	// Clear all of the statistics registers (clear on read).  It is
+	// important that we do this after we have tried to establish link
+	// because the symbol error count will increment wildly if there
+	// is no link.
+	ClearHWCounters(hw)
+
+	return err
+}

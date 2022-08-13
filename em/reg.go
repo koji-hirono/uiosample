@@ -26,6 +26,9 @@ const (
 	// MDI Control - RW
 	MDIC = 0x0020
 
+	// SerDes Control - RW
+	SCTL = 0x0024
+
 	// Flow Control Address Low - RW
 	FCAL = 0x0028
 
@@ -403,6 +406,15 @@ const (
 	// Function Active and Power State to MNG
 	FACTPS = 0x5b30
 
+	// GIO Analog Control Register
+	GIOCTL = 0x5b44
+
+	// CCM Control Register
+	CCMCTL = 0x5b48
+
+	// PCIc PLL Configuration Register
+	SCCTL = 0x5b4c
+
 	// SW Semaphore
 	SWSM = 0x5b50
 
@@ -410,7 +422,10 @@ const (
 	FWSM = 0x5b54
 
 	// SW-FW Synchronization - RW
-	SW_FW_SYNC = 0x05b5c
+	SW_FW_SYNC = 0x5b5c
+
+	// Unicast Table Array - RW
+	UTA = 0xa000
 )
 
 // CTRL
@@ -973,6 +988,27 @@ const (
 // FACTPS
 const (
 	FACTPS_MNGCG uint32 = 0x20000000
+)
+
+// GCR
+const (
+	GCR_RXD_NO_SNOOP      uint32 = 0x00000001
+	GCR_RXDSCW_NO_SNOOP   uint32 = 0x00000002
+	GCR_RXDSCR_NO_SNOOP   uint32 = 0x00000004
+	GCR_TXD_NO_SNOOP      uint32 = 0x00000008
+	GCR_TXDSCW_NO_SNOOP   uint32 = 0x00000010
+	GCR_TXDSCR_NO_SNOOP   uint32 = 0x00000020
+	GCR_CMPL_TMOUT_MASK   uint32 = 0x0000f000
+	GCR_CMPL_TMOUT_10ms   uint32 = 0x00001000
+	GCR_CMPL_TMOUT_RESEND uint32 = 0x00010000
+	GCR_CAP_VER2          uint32 = 0x00040000
+
+	PCIE_NO_SNOOP_ALL = GCR_RXD_NO_SNOOP |
+		GCR_RXDSCW_NO_SNOOP |
+		GCR_RXDSCR_NO_SNOOP |
+		GCR_TXD_NO_SNOOP |
+		GCR_TXDSCW_NO_SNOOP |
+		GCR_TXDSCR_NO_SNOOP
 )
 
 // SWSM

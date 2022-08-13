@@ -600,3 +600,67 @@ func PutHWSemaphore(hw *HW) {
 	swsm &^= SWSM_SMBI | SWSM_SWESMBI
 	hw.RegWrite(SWSM, swsm)
 }
+
+func InitRxAddrs(hw *HW, n int) {
+	mac := &hw.MAC
+
+	// Setup the receive address
+	mac.Op.SetRAR(mac.Addr, 0)
+
+	// Zero out the other (rar_entry_count - 1) receive addresses */
+	var addr [6]byte
+	for i := 1; i < n; i++ {
+		mac.Op.SetRAR(addr, i)
+	}
+}
+
+func Write8bitCtrlReg(hw *HW, reg int, offset uint32, data uint8) error {
+	// Set up the address and data
+	value := uint32(data)
+	value |= offset << GEN_CTL_ADDRESS_SHIFT
+	hw.RegWrite(reg, value)
+
+	// Poll the ready bit to see if the MDI read completed
+	for i := 0; i < GEN_POLL_TIMEOUT; i++ {
+		time.Sleep(5 * time.Microsecond)
+		value := hw.RegRead(reg)
+		if value&GEN_CTL_READY != 0 {
+			return nil
+		}
+	}
+	return errors.New("did not indicate ready")
+}
+
+const MASTER_DISABLE_TIMEOUT = 800
+
+func DisablePCIEMaster(hw *HW) error {
+	if hw.Bus.Type != BusTypePCIExpress {
+		return nil
+	}
+
+	ctrl := hw.RegRead(CTRL)
+	ctrl |= CTRL_GIO_MASTER_DISABLE
+	hw.RegWrite(CTRL, ctrl)
+
+	timeout := MASTER_DISABLE_TIMEOUT
+	for timeout > 0 {
+		if hw.RegRead(STATUS)&STATUS_GIO_MASTER_ENABLE == 0 {
+			return nil
+		}
+		time.Sleep(100 * time.Microsecond)
+		timeout--
+	}
+	return errors.New("Master requests are pending")
+}
+
+const AUTO_READ_DONE_TIMEOUT = 10
+
+func GetAutoRDDone(hw *HW) error {
+	for i := 0; i < AUTO_READ_DONE_TIMEOUT; i++ {
+		if hw.RegRead(EECD)&EECD_AUTO_RD != 0 {
+			return nil
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	return errors.New("Auto read by HW from NVM has not completed.")
+}

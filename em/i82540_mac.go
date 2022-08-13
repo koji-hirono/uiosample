@@ -169,7 +169,7 @@ func (m *I82540MAC) InitHW() error {
 
 	m.ClearVFTA()
 
-	// e1000_init_rx_addrs_generic(hw, mac->rar_entry_count)
+	InitRxAddrs(m.hw, int(m.hw.MAC.RAREntryCount))
 
 	for i := 0; i < int(m.hw.MAC.MTARegCount); i++ {
 		m.hw.RegWrite(MTA+(i<<2), 0)
