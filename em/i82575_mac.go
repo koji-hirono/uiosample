@@ -180,7 +180,7 @@ func (m *I82575MAC) ClearHWCounters() {
 func (m *I82575MAC) ClearVFTA() {
 	switch m.hw.MAC.Type {
 	case MACTypeI350, MACTypeI354:
-		//ClearVFTAI350(m.hw)
+		m.clearVFTAI350()
 	default:
 		ClearVFTA(m.hw)
 	}
@@ -317,6 +317,16 @@ func (m *I82575MAC) ReleaseSWFWSync(mask uint16) {
 		releaseSWFWSyncI210(m.hw, mask)
 	default:
 		releaseSWFWSync82575(m.hw, mask)
+	}
+}
+
+func (m *I82575MAC) clearVFTAI350() {
+	hw := m.hw
+	for offset := 0; offset < VLAN_FILTER_TBL_SIZE; offset++ {
+		for i := 0; i < 10; i++ {
+			hw.RegWrite(VFTA+(offset<<2), 0)
+		}
+		hw.RegWriteFlush()
 	}
 }
 
