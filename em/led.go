@@ -112,6 +112,35 @@ func ValidLEDDefault(hw *HW) (uint16, error) {
 	return x[0], nil
 }
 
+func BlinkLED(hw *HW) error {
+	switch hw.PHY.MediaType {
+	case MediaTypeFiber:
+		// always blink LED0 for PCI-E fiber
+		ledctl := LEDCTL_LED0_BLINK
+		ledctl |= LEDCTL_MODE_LED_ON << LEDCTL_LED0_MODE_SHIFT
+		hw.RegWrite(LEDCTL, ledctl)
+	default:
+		// Set the blink bit for each LED that's "on" (0x0E)
+		// (or "off" if inverted) in ledctl_mode2.  The blink
+		// logic in hardware only works when mode is set to "on"
+		// so it must be changed accordingly when the mode is
+		// "off" and inverted.
+		ledctl := hw.MAC.LEDCtlMode2
+		for i := 0; i < 32; i += 8 {
+			mode := (hw.MAC.LEDCtlMode2 >> i) & LEDCTL_LED0_MODE_MASK
+			def := hw.MAC.LEDCtlDefault >> i
+			if (def&LEDCTL_LED0_IVRT == 0 && mode == LEDCTL_MODE_LED_ON) ||
+				(def&LEDCTL_LED0_IVRT != 0 && mode == LEDCTL_MODE_LED_OFF) {
+				ledctl &^= LEDCTL_LED0_MODE_MASK << i
+				ledctl |= LEDCTL_LED0_BLINK
+				ledctl |= LEDCTL_MODE_LED_ON << i
+			}
+		}
+		hw.RegWrite(LEDCTL, ledctl)
+	}
+	return nil
+}
+
 func LEDOn(hw *HW) error {
 	switch hw.PHY.MediaType {
 	case MediaTypeFiber:
