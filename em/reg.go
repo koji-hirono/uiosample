@@ -68,6 +68,9 @@ const (
 	// Transmit Control
 	TCTL = 0x0400
 
+	// Extended Tx Control - RW
+	TCTL_EXT = 0x0404
+
 	// LED Control - RW
 	LEDCTL = 0x0e00
 
@@ -678,6 +681,13 @@ const (
 	TCTL_COLD uint32 = 0x003ff000 // collision distance
 	TCTL_RTLC uint32 = 0x01000000 // Re-transmit on late collision
 	TCTL_MULR uint32 = 0x10000000 // Multiple request support
+)
+
+// TCTL_EXT
+const (
+	TCTL_EXT_COLD uint32 = 0x000ffc00
+
+	TCTL_EXT_COLD_SHIFT = 10
 )
 
 // Collision related configuration parameters

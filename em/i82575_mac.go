@@ -307,7 +307,12 @@ func (m *I82575MAC) WriteVFTA(offset, val uint32) {
 }
 
 func (m *I82575MAC) ConfigCollisionDist() {
-	// e1000_config_collision_dist_82575
+	hw := m.hw
+	tctl_ext := hw.RegRead(TCTL_EXT)
+	tctl_ext &^= TCTL_EXT_COLD
+	tctl_ext |= COLLISION_DISTANCE << TCTL_EXT_COLD_SHIFT
+	hw.RegWrite(TCTL_EXT, tctl_ext)
+	hw.RegWriteFlush()
 }
 
 func (m *I82575MAC) SetRAR(addr [6]byte, index int) error {
