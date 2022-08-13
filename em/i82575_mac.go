@@ -614,6 +614,29 @@ func (m *I82575MAC) resetInitScript() error {
 }
 
 func (m *I82575MAC) initHWI210() error {
+	hw := m.hw
+	if hw.MAC.Type >= MACTypeI210 && !m.getFlashPresenceI210() {
+		err := m.pllWorkaroundI210()
+		if err != nil {
+			return err
+		}
+	}
+	// TODO
+	// hw.PHY.Op.GetCfgDone = e1000_get_cfg_done_i210
+
+	// Initialize identification LED
+	m.IDLEDInit()
+
+	return InitHWBase(hw)
+}
+
+func (m *I82575MAC) getFlashPresenceI210() bool {
+	eecd := m.hw.RegRead(EECD)
+	return eecd&EECD_FLASH_DETECTED_I210 != 0
+}
+
+func (m *I82575MAC) pllWorkaroundI210() error {
+	// TODO:
 	return nil
 }
 
