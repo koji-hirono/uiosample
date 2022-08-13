@@ -448,3 +448,76 @@ func CopperLinkSetupM88(hw *HW) error {
 
 	return nil
 }
+
+func CopperLinkSetupM88gen2(hw *HW) error {
+	phy := &hw.PHY
+	// Enable CRS on Tx. This must be set for half-duplex operation.
+	data, err := phy.Op.ReadReg(M88E1000_PHY_SPEC_CTRL)
+	if err != nil {
+		return err
+	}
+
+	// Options:
+	//   MDI/MDI-X = 0 (default)
+	//   0 - Auto for all speeds
+	//   1 - MDI mode
+	//   2 - MDI-X mode
+	//   3 - Auto for 1000Base-T only (MDI-X for 10/100Base-T modes)
+	data &^= M88E1000_PSCR_AUTO_X_MODE
+
+	switch phy.MDIX {
+	case 1:
+		data |= M88E1000_PSCR_MDI_MANUAL_MODE
+	case 2:
+		data |= M88E1000_PSCR_MDIX_MANUAL_MODE
+	case 3:
+		// M88E1112 does not support this mode)
+		if phy.ID != M88E1112_E_PHY_ID {
+			data |= M88E1000_PSCR_AUTO_X_1000T
+		}
+		data |= M88E1000_PSCR_AUTO_X_MODE
+	default:
+		data |= M88E1000_PSCR_AUTO_X_MODE
+	}
+
+	// Options:
+	//   disable_polarity_correction = 0 (default)
+	//       Automatic Correction for Reversed Cable Polarity
+	//   0 - Disabled
+	//   1 - Enabled
+	data &^= M88E1000_PSCR_POLARITY_REVERSAL
+	if phy.DisablePolarityCorrection {
+		data |= M88E1000_PSCR_POLARITY_REVERSAL
+	}
+
+	// Enable downshift and setting it to X6
+	if phy.ID == M88E1543_E_PHY_ID {
+		data &^= I347AT4_PSCR_DOWNSHIFT_ENABLE
+		err := phy.Op.WriteReg(M88E1000_PHY_SPEC_CTRL, data)
+		if err != nil {
+			return err
+		}
+
+		err = phy.Op.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	data &^= I347AT4_PSCR_DOWNSHIFT_MASK
+	data |= I347AT4_PSCR_DOWNSHIFT_6X
+	data |= I347AT4_PSCR_DOWNSHIFT_ENABLE
+
+	err = phy.Op.WriteReg(M88E1000_PHY_SPEC_CTRL, data)
+	if err != nil {
+		return err
+	}
+
+	// Commit the changes.
+	err = phy.Op.Commit()
+	if err != nil {
+		return err
+	}
+
+	return SetMasterSlaveMode(hw)
+}
