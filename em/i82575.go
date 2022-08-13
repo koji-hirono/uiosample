@@ -1,5 +1,14 @@
 package em
 
+// SFP modules ID memory locations
+const (
+	SFF_IDENTIFIER_OFFSET = 0x00
+	SFF_IDENTIFIER_SFF    = 0x02
+	SFF_IDENTIFIER_SFP    = 0x03
+
+	SFF_ETH_FLAGS_OFFSET = 0x06
+)
+
 // Flags for SFP modules compatible with ETH up to 1Gb
 type SFPFlags uint8
 
