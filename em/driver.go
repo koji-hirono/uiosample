@@ -16,18 +16,19 @@ const FC_PAUSE_TIME = 0x0680
 const FCSetting = FCModeFull
 
 type Driver struct {
-	Dev    *pci.Device
-	Logger *log.Logger
-	Config *ethdev.Config
-	link   *Link
-	led    *LED
-	HW     *HW
-	Reg    Reg
-	MAC    [][6]byte
-	nrxq   int
-	ntxq   int
-	rxq    [1]RxQueue
-	txq    [1]TxQueue
+	Dev     *pci.Device
+	Logger  *log.Logger
+	Config  *ethdev.Config
+	link    *Link
+	led     *LED
+	counter *ethdev.CounterGroup
+	HW      *HW
+	Reg     Reg
+	MAC     [][6]byte
+	nrxq    int
+	ntxq    int
+	rxq     [1]RxQueue
+	txq     [1]TxQueue
 }
 
 // int eth_em_dev_init(struct rte_eth_dev *eth_dev)
@@ -79,6 +80,7 @@ func AttachDriver(dev *pci.Device, logger *log.Logger) (*Driver, error) {
 	*/
 	d.link = NewLink(d.HW)
 	d.led = NewLED(&d.HW.MAC)
+	d.counter = NewCounterGroup(d.HW)
 
 	return d, nil
 }
@@ -368,7 +370,7 @@ func (d *Driver) GetMACAddr() ([6]byte, error) {
 }
 
 func (d *Driver) CounterGroup() *ethdev.CounterGroup {
-	return nil
+	return d.counter
 }
 
 func (d *Driver) LED() ethdev.LED {
