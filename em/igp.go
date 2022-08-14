@@ -66,3 +66,53 @@ const (
 	IGP02E1000_AGC_LENGTH_MASK  = 0x7f
 	IGP02E1000_AGC_RANGE        = 15
 )
+
+func ReadPHYRegIGP(hw *HW, offset uint32) (uint16, error) {
+	phy := &hw.PHY
+	err := phy.Op.Acquire()
+	if err != nil {
+		return 0, err
+	}
+	defer phy.Op.Release()
+
+	if offset > MAX_PHY_MULTI_PAGE_REG {
+		err := WritePHYRegMDIC(hw, IGP01E1000_PHY_PAGE_SELECT, uint16(offset))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return ReadPHYRegMDIC(hw, MAX_PHY_REG_ADDRESS&offset)
+}
+
+func WritePHYRegIGP(hw *HW, offset uint32, data uint16) error {
+	phy := &hw.PHY
+	err := phy.Op.Acquire()
+	if err != nil {
+		return err
+	}
+	defer phy.Op.Release()
+
+	if offset > MAX_PHY_MULTI_PAGE_REG {
+		err := WritePHYRegMDIC(hw, IGP01E1000_PHY_PAGE_SELECT, uint16(offset))
+		if err != nil {
+			return err
+		}
+	}
+	return WritePHYRegMDIC(hw, MAX_PHY_REG_ADDRESS&offset, data)
+}
+
+func CheckPolarityIGP(hw *HW) error {
+	return nil
+}
+
+func PHYForceSpeedDuplexIGP(hw *HW) error {
+	return nil
+}
+
+func GetCableLengthIGP2(hw *HW) error {
+	return nil
+}
+
+func GetPHYInfoIGP(hw *HW) error {
+	return nil
+}

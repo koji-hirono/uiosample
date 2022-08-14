@@ -174,7 +174,7 @@ func (m *I82575MAC) ClearHWCounters() {
 	m.hw.RegRead(LENERRS)
 
 	// This register should not be read in copper configurations
-	if m.hw.PHY.MediaType == MediaTypeInternalSerdes || m.SGMIIActive() {
+	if m.hw.PHY.MediaType == MediaTypeInternalSerdes || SGMIIActive82575(m.hw) {
 		m.hw.RegRead(SCVPC)
 	}
 }
@@ -219,7 +219,7 @@ func (m *I82575MAC) UpdateMCAddrList(addrs [][6]byte) {
 
 func (m *I82575MAC) ResetHW() error {
 	if m.hw.MAC.Type >= MACType82580 {
-		return m.resetHW82580()
+		return ResetHW82580(m.hw)
 	} else {
 		return m.resetHW82575()
 	}
@@ -236,7 +236,7 @@ func (m *I82575MAC) InitHW() error {
 
 func (m *I82575MAC) ShutdownSerdes() {
 	hw := m.hw
-	if hw.PHY.MediaType != MediaTypeInternalSerdes && !m.SGMIIActive() {
+	if hw.PHY.MediaType != MediaTypeInternalSerdes && !SGMIIActive82575(hw) {
 		return
 	}
 
@@ -261,7 +261,7 @@ func (m *I82575MAC) ShutdownSerdes() {
 
 func (m *I82575MAC) PowerUpSerdes() {
 	hw := m.hw
-	if hw.PHY.MediaType != MediaTypeInternalSerdes && !m.SGMIIActive() {
+	if hw.PHY.MediaType != MediaTypeInternalSerdes && !SGMIIActive82575(hw) {
 		return
 	}
 
@@ -412,106 +412,6 @@ func (m *I82575MAC) getPCSSpeedAndDuplex() (uint16, uint16, error) {
 		}
 	}
 	return speed, duplex, nil
-}
-
-func (m *I82575MAC) resetHW82580() error {
-	hw := m.hw
-	spec := hw.Spec.(*I82575DeviceSpec)
-
-	global_device_reset := spec.GlobalDeviceReset
-	spec.GlobalDeviceReset = false
-
-	// 82580 does not reliably do global_device_reset due to hw errata
-	if hw.MAC.Type == MACType82580 {
-		global_device_reset = false
-	}
-
-	// Get current control state.
-	ctrl := hw.RegRead(CTRL)
-
-	// Prevent the PCI-E bus from sticking if there is no TLP connection
-	// on the last TLP read/write transaction when MAC is reset.
-	DisablePCIEMaster(hw)
-
-	hw.RegWrite(IMC, ^uint32(0))
-	hw.RegWrite(RCTL, 0)
-	hw.RegWrite(TCTL, TCTL_PSP)
-	hw.RegWriteFlush()
-
-	time.Sleep(10 * time.Millisecond)
-
-	// BH SW mailbox bit in SW_FW_SYNC
-	swmbsw_mask := SW_SYNCH_MB
-	// Determine whether or not a global dev reset is requested
-	if global_device_reset && m.AcquireSWFWSync(swmbsw_mask) != nil {
-		global_device_reset = false
-	}
-
-	if global_device_reset && hw.RegRead(STATUS)&STAT_DEV_RST_SET == 0 {
-		ctrl |= CTRL_DEV_RST
-	} else {
-		ctrl |= CTRL_RST
-	}
-	hw.RegWrite(CTRL, ctrl)
-
-	switch hw.DeviceID {
-	case DEV_ID_DH89XXCC_SGMII:
-	default:
-		hw.RegWriteFlush()
-	}
-
-	// Add delay to insure DEV_RST or RST has time to complete
-	time.Sleep(5 * time.Millisecond)
-
-	// When auto config read does not complete, do not
-	// return with an error. This can happen in situations
-	// where there is no eeprom and prevents getting link.
-	GetAutoRDDone(hw)
-
-	// clear global device reset status bit
-	hw.RegWrite(STATUS, STAT_DEV_RST_SET)
-
-	// Clear any pending interrupt events.
-	hw.RegWrite(IMC, ^uint32(0))
-	hw.RegRead(ICR)
-
-	m.resetMDIConfig82580()
-
-	// Install any alternate MAC address into RAR0
-	err := CheckAltMACAddr(hw)
-
-	// Release semaphore
-	if global_device_reset {
-		m.ReleaseSWFWSync(swmbsw_mask)
-	}
-
-	return err
-}
-
-func (m *I82575MAC) resetMDIConfig82580() error {
-	hw := m.hw
-	if hw.MAC.Type != MACType82580 {
-		return nil
-	}
-	if !m.SGMIIActive() {
-		return nil
-	}
-
-	var data [1]uint16
-	err := hw.NVM.Op.Read(NVM_INIT_CONTROL3_PORT_A+NVM_82580_LAN_FUNC_OFFSET(hw.Bus.Func), data[:])
-	if err != nil {
-		return err
-	}
-
-	mdicnfg := hw.RegRead(MDICNFG)
-	if data[0]&NVM_WORD24_EXT_MDIO != 0 {
-		mdicnfg |= MDICNFG_EXT_MDIO
-	}
-	if data[0]&NVM_WORD24_COM_MDIO != 0 {
-		mdicnfg |= MDICNFG_COM_MDIO
-	}
-	hw.RegWrite(MDICNFG, mdicnfg)
-	return nil
 }
 
 func (m *I82575MAC) resetHW82575() error {
@@ -671,11 +571,6 @@ func (m *I82575MAC) writeVFTAI350(offset, val uint32) {
 	hw.RegWriteFlush()
 }
 
-func (m *I82575MAC) SGMIIActive() bool {
-	spec := m.hw.Spec.(*I82575DeviceSpec)
-	return spec.SGMIIActive
-}
-
 func (m *I82575MAC) setupSerdesLink() error {
 	return nil
 }
@@ -698,7 +593,7 @@ func (m *I82575MAC) setupCopperLink() error {
 		return err
 	}
 
-	if m.SGMIIActive() {
+	if SGMIIActive82575(m.hw) {
 		// allow time for SFP cage time to power up phy
 		time.Sleep(300 * time.Millisecond)
 
@@ -761,7 +656,7 @@ func (m *I82575MAC) getMediaType() error {
 		phy.MediaType = MediaTypeCopper
 	case CTRL_EXT_LINK_MODE_SGMII:
 		// Get phy control interface type set (MDIO vs. I2C)
-		if m.SGMIIUsesMDIO() {
+		if SGMIIUsesMDIO82575(hw) {
 			phy.MediaType = MediaTypeCopper
 			spec.SGMIIActive = true
 			break
@@ -797,20 +692,6 @@ func (m *I82575MAC) getMediaType() error {
 	}
 
 	return nil
-}
-
-func (m *I82575MAC) SGMIIUsesMDIO() bool {
-	hw := m.hw
-	switch hw.MAC.Type {
-	case MACType82575, MACType82576:
-		x := hw.RegRead(MDIC)
-		return x&MDIC_DEST != 0
-	case MACType82580, MACTypeI350, MACTypeI354, MACTypeI210, MACTypeI211:
-		x := hw.RegRead(MDICNFG)
-		return x&MDICNFG_EXT_MDIO != 0
-	default:
-		return false
-	}
 }
 
 func (m *I82575MAC) setSFPMediaType() error {

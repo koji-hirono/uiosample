@@ -32,6 +32,7 @@ const (
 	I350_I_PHY_ID              = 0x015403B0
 	I210_I_PHY_ID              = 0x01410C00
 	IGP04E1000_E_PHY_ID        = 0x02A80391
+	BCM54616_E_PHY_ID          = 0x03625D10
 	M88_VENDOR                 = 0x0141
 )
 
@@ -895,6 +896,102 @@ func CopperLinkSetupIgp(hw *HW) error {
 			}
 		}
 		return SetMasterSlaveMode(hw)
+	}
+	return nil
+}
+
+func CheckResetBlock(hw *HW) error {
+	manc := hw.RegRead(MANC)
+	if manc&MANC_BLK_PHY_RST_ON_IDE != 0 {
+		return errors.New("block phy reset")
+	}
+	return nil
+}
+
+func AcquirePHYBase(hw *HW) error {
+	var mask uint16
+	switch hw.Bus.Func {
+	case 1:
+		mask = SWFW_PHY1_SM
+	case 2:
+		mask = SWFW_PHY2_SM
+	case 3:
+		mask = SWFW_PHY3_SM
+	default:
+		mask = SWFW_PHY0_SM
+	}
+	return hw.MAC.Op.AcquireSWFWSync(mask)
+}
+
+func ReleasePHYBase(hw *HW) {
+	var mask uint16
+	switch hw.Bus.Func {
+	case 1:
+		mask = SWFW_PHY1_SM
+	case 2:
+		mask = SWFW_PHY2_SM
+	case 3:
+		mask = SWFW_PHY3_SM
+	default:
+		mask = SWFW_PHY0_SM
+	}
+	hw.MAC.Op.ReleaseSWFWSync(mask)
+}
+
+func SetD3LpluState(hw *HW, active bool) error {
+	phy := &hw.PHY
+
+	data, err := phy.Op.ReadReg(IGP02E1000_PHY_POWER_MGMT)
+	if err != nil {
+		return err
+	}
+
+	if !active {
+		data &^= IGP02E1000_PM_D3_LPLU
+		err := phy.Op.WriteReg(IGP02E1000_PHY_POWER_MGMT, data)
+		if err != nil {
+			return err
+		}
+		// LPLU and SmartSpeed are mutually exclusive.  LPLU is used
+		// during Dx states where the power conservation is most
+		// important.  During driver activity we should enable
+		// SmartSpeed, so performance is maintained.
+		if phy.SmartSpeed == SmartSpeedOn {
+			data, err := phy.Op.ReadReg(IGP01E1000_PHY_PORT_CONFIG)
+			if err != nil {
+				return err
+			}
+			data |= IGP01E1000_PSCFR_SMART_SPEED
+			err = phy.Op.WriteReg(IGP01E1000_PHY_PORT_CONFIG, data)
+			if err != nil {
+				return err
+			}
+		} else if phy.SmartSpeed == SmartSpeedOff {
+			data, err := phy.Op.ReadReg(IGP01E1000_PHY_PORT_CONFIG)
+			if err != nil {
+				return err
+			}
+			data &^= IGP01E1000_PSCFR_SMART_SPEED
+			err = phy.Op.WriteReg(IGP01E1000_PHY_PORT_CONFIG, data)
+			if err != nil {
+				return err
+			}
+		}
+	} else if phy.AutonegAdvertised == ALL_SPEED_DUPLEX ||
+		phy.AutonegAdvertised == ALL_NOT_GIG ||
+		phy.AutonegAdvertised == ALL_10_SPEED {
+		data |= IGP02E1000_PM_D3_LPLU
+		err := phy.Op.WriteReg(IGP02E1000_PHY_POWER_MGMT, data)
+		if err != nil {
+			return err
+		}
+		// When LPLU is enabled, we should disable SmartSpeed
+		data, err = phy.Op.ReadReg(IGP01E1000_PHY_PORT_CONFIG)
+		if err != nil {
+			return err
+		}
+		data &^= IGP01E1000_PSCFR_SMART_SPEED
+		return phy.Op.WriteReg(IGP01E1000_PHY_PORT_CONFIG, data)
 	}
 	return nil
 }

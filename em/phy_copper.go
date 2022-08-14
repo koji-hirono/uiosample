@@ -25,6 +25,13 @@ func PowerDownPHYCopper(hw *HW) {
 	time.Sleep(1 * time.Millisecond)
 }
 
+func PowerDownPHYCopperBase(hw *HW) {
+	phy := &hw.PHY
+	if phy.Op.CheckResetBlock() != nil {
+		PowerDownPHYCopper(hw)
+	}
+}
+
 func SetupCopperLink(hw *HW) error {
 	if hw.MAC.Autoneg {
 		// Setup autoneg and flow control advertisement and perform

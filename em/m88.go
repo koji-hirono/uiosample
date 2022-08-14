@@ -2,6 +2,7 @@ package em
 
 import (
 	"errors"
+	"time"
 )
 
 // M88E1000 Specific Registers
@@ -72,7 +73,33 @@ const (
 
 // M88E1112 only registers
 const (
-	M88E1112_VCT_DSP_DISTANCE = 0x001A
+	M88E1112_VCT_DSP_DISTANCE     = 0x001A
+	M88E1112_AUTO_COPPER_SGMII    = 0x2
+	M88E1112_AUTO_COPPER_BASEX    = 0x3
+	M88E1112_STATUS_LINK          = 0x0004 // Interface Link Bit
+	M88E1112_MAC_CTRL_1           = 0x10
+	M88E1112_MAC_CTRL_1_MODE_MASK = 0x0380 // Mode Select
+
+	M88E1112_MAC_CTRL_1_MODE_SHIFT = 7
+
+	M88E1112_PAGE_ADDR = 0x16
+	M88E1112_STATUS    = 0x01
+)
+
+// M88E1543
+const (
+	M88E1543_PAGE_ADDR     = 0x16 // Page Offset Register
+	M88E1543_EEE_CTRL_1    = 0x0
+	M88E1543_EEE_CTRL_1_MS = 0x0001 // EEE Master/Slave
+	M88E1543_FIBER_CTRL    = 0x0    // Fiber Control Register
+)
+
+// M88E1512
+const (
+	M88E1512_CFG_REG_1 = 0x0010
+	M88E1512_CFG_REG_2 = 0x0011
+	M88E1512_CFG_REG_3 = 0x0007
+	M88E1512_MODE      = 0x0014
 )
 
 // M88EC018 Rev 2 specific DownShift settings
@@ -228,6 +255,10 @@ func GetCableLengthM88(hw *HW) error {
 	phy.MinCableLength = m88CableLengthTable[index]
 	phy.MaxCableLength = m88CableLengthTable[index+1]
 	phy.CableLength = (phy.MinCableLength + phy.MaxCableLength) / 2
+	return nil
+}
+
+func GetCableLengthM88gen2(hw *HW) error {
 	return nil
 }
 
@@ -520,4 +551,198 @@ func CopperLinkSetupM88gen2(hw *HW) error {
 	}
 
 	return SetMasterSlaveMode(hw)
+}
+
+// s32 e1000_initialize_M88E1512_phy(struct e1000_hw *hw)
+func InitM88E1512PHY(hw *HW) error {
+	phy := &hw.PHY
+	// Check if this is correct PHY.
+	if phy.ID != M88E1512_E_PHY_ID {
+		return nil
+	}
+	// Switch to PHY page 0xFF.
+	err := phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x00ff)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0x214b)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2144)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0x0c28)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2146)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0xb233)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x214d)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0xcc0c)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2159)
+	if err != nil {
+		return err
+	}
+
+	// Switch to PHY page 0xFB.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x00fb)
+	if err != nil {
+		return err
+	}
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_3, 0x000d)
+	if err != nil {
+		return err
+	}
+
+	// Switch to PHY page 0x12.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x12)
+	if err != nil {
+		return err
+	}
+
+	// Change mode to SGMII-to-Copper
+	err = phy.Op.WriteReg(M88E1512_MODE, 0x8001)
+	if err != nil {
+		return err
+	}
+
+	// Return the PHY to page 0.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.Commit()
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1000 * time.Millisecond)
+	return nil
+}
+
+// s32 e1000_initialize_M88E1543_phy(struct e1000_hw *hw)
+func InitM88E1543PHY(hw *HW) error {
+	phy := &hw.PHY
+	// Check if this is correct PHY.
+	if phy.ID != M88E1543_E_PHY_ID {
+		return nil
+	}
+
+	// Switch to PHY page 0xFF.
+	err := phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x00ff)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0x214b)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2144)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0x0c28)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2146)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0xb233)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x214d)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_2, 0xdc0c)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_1, 0x2159)
+	if err != nil {
+		return err
+	}
+
+	// Switch to PHY page 0xFB.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x00fb)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.WriteReg(M88E1512_CFG_REG_3, 0xc00d)
+	if err != nil {
+		return err
+	}
+
+	// Switch to PHY page 0x12.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x12)
+	if err != nil {
+		return err
+	}
+
+	// Change mode to SGMII-to-Copper
+	err = phy.Op.WriteReg(M88E1512_MODE, 0x8001)
+	if err != nil {
+		return err
+	}
+
+	// Switch to PHY page 1.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0x1)
+	if err != nil {
+		return err
+	}
+
+	// Change mode to 1000BASE-X/SGMII and autoneg enable; reset
+	err = phy.Op.WriteReg(M88E1543_FIBER_CTRL, 0x9140)
+	if err != nil {
+		return err
+	}
+
+	// Return the PHY to page 0.
+	err = phy.Op.WriteReg(M88E1543_PAGE_ADDR, 0)
+	if err != nil {
+		return err
+	}
+
+	err = phy.Op.Commit()
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1000 * time.Millisecond)
+	return nil
 }

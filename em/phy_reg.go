@@ -20,6 +20,8 @@ const PHY_REVISION_MASK uint32 = 0xFFFFFFF0
 
 const MAX_PHY_REG_ADDRESS = 0x1F // 5 bit address bus (0-0x1F)
 
+const MAX_PHY_MULTI_PAGE_REG = 0xf
+
 // PHY Control Register
 const (
 	MII_CR_SPEED_SELECT_MSB = 0x0040 // bits 6,13: 10=1000, 01=100, 00=10
