@@ -29,16 +29,17 @@ const (
 )
 
 const (
-	NVM_INIT_CONTROL2_REG      uint16 = 0x000F
-	NVM_INIT_CONTROL3_PORT_B          = 0x0014
-	NVM_INIT_3GIO_3                   = 0x001A
-	NVM_SWDEF_PINS_CTRL_PORT_0        = 0x0020
-	NVM_INIT_CONTROL3_PORT_A          = 0x0024
-	NVM_CFG                           = 0x0012
-	NVM_ALT_MAC_ADDR_PTR              = 0x0037
-	NVM_CHECKSUM_REG                  = 0x003F
-	NVM_COMPATIBILITY_REG_3           = 0x0003
-	NVM_COMPATIBILITY_BIT_MASK        = 0x8000
+	NVM_INIT_CONTROL2_REG          uint16 = 0x000F
+	NVM_INIT_CONTROL3_PORT_B              = 0x0014
+	NVM_INIT_3GIO_3                       = 0x001A
+	NVM_SWDEF_PINS_CTRL_PORT_0            = 0x0020
+	NVM_INIT_CONTROL3_PORT_A              = 0x0024
+	NVM_CFG                               = 0x0012
+	NVM_ALT_MAC_ADDR_PTR                  = 0x0037
+	NVM_CHECKSUM_REG                      = 0x003F
+	NVM_COMPATIBILITY_REG_3               = 0x0003
+	NVM_COMPATIBILITY_BIT_MASK            = 0x8000
+	EEPROM_PCS_AUTONEG_DISABLE_BIT        = 1 << 14
 )
 
 // For checksumming, the sum of all words in the NVM should equal 0xBABA.

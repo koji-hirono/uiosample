@@ -527,6 +527,117 @@ func (m *I82575MAC) initHW82575() error {
 }
 
 func (m *I82575MAC) setupSerdesLink() error {
+	hw := m.hw
+	nvm := &hw.NVM
+	phy := &hw.PHY
+	mac := &hw.MAC
+
+	if phy.MediaType != MediaTypeInternalSerdes && !SGMIIActive82575(hw) {
+		return nil
+	}
+
+	// On the 82575, SerDes loopback mode persists until it is
+	// explicitly turned off or a power cycle is performed.  A read to
+	// the register does not indicate its status.  Therefore, we ensure
+	// loopback mode is disabled during initialization.
+	hw.RegWrite(SCTL, SCTL_DISABLE_SERDES_LOOPBACK)
+
+	// power on the sfp cage if present
+	ctrl_ext := hw.RegRead(CTRL_EXT)
+	ctrl_ext &^= CTRL_EXT_SDP3_DATA
+	hw.RegWrite(CTRL_EXT, ctrl_ext)
+
+	ctrl_reg := hw.RegRead(CTRL)
+	ctrl_reg |= CTRL_SLU
+
+	// set both sw defined pins on 82575/82576
+	if mac.Type == MACType82575 || mac.Type == MACType82576 {
+		ctrl_reg |= CTRL_SWDPIN0 | CTRL_SWDPIN1
+	}
+
+	reg := hw.RegRead(PCS_LCTL)
+
+	// default pcs_autoneg to the same setting as mac autoneg
+	pcs_autoneg := mac.Autoneg
+
+	switch ctrl_ext & CTRL_EXT_LINK_MODE_MASK {
+	case CTRL_EXT_LINK_MODE_SGMII:
+		// sgmii mode lets the phy handle forcing speed/duplex
+		pcs_autoneg = true
+		// autoneg time out should be disabled for SGMII mode
+		reg &^= PCS_LCTL_AN_TIMEOUT
+	case CTRL_EXT_LINK_MODE_1000BASE_KX:
+		// disable PCS autoneg and support parallel detect only
+		pcs_autoneg = false
+		fallthrough
+	default:
+		if mac.Type == MACType82575 || mac.Type == MACType82576 {
+			var data [1]uint16
+			err := nvm.Op.Read(NVM_COMPAT, data[:])
+			if err != nil {
+				return err
+			}
+			if data[0]&EEPROM_PCS_AUTONEG_DISABLE_BIT != 0 {
+				pcs_autoneg = false
+			}
+		}
+
+		// non-SGMII modes only supports a speed of 1000/Full for the
+		// link so it is best to just force the MAC and let the pcs
+		// link either autoneg or be forced to 1000/Full
+		ctrl_reg |= CTRL_SPD_1000
+		ctrl_reg |= CTRL_FRCSPD
+		ctrl_reg |= CTRL_FD
+		ctrl_reg |= CTRL_FRCDPX
+
+		// set speed of 1000/Full if speed/duplex is forced
+		reg |= PCS_LCTL_FSV_1000 | PCS_LCTL_FDV_FULL
+	}
+
+	hw.RegWrite(CTRL, ctrl_reg)
+
+	// New SerDes mode allows for forcing speed or autonegotiating speed
+	// at 1gb. Autoneg should be default set by most drivers. This is the
+	// mode that will be compatible with older link partners and switches.
+	// However, both are supported by the hardware and some drivers/tools.
+	reg &^= PCS_LCTL_AN_ENABLE
+	reg &^= PCS_LCTL_FLV_LINK_UP
+	reg &^= PCS_LCTL_FSD
+	reg &^= PCS_LCTL_FORCE_LINK
+	if pcs_autoneg {
+		// Set PCS register for autoneg
+		reg |= PCS_LCTL_AN_ENABLE  // Enable Autoneg
+		reg |= PCS_LCTL_AN_RESTART // Restart autoneg
+
+		// Disable force flow control for autoneg
+		reg &^= PCS_LCTL_FORCE_FCTRL
+
+		// Configure flow control advertisement for autoneg
+		anadv_reg := hw.RegRead(PCS_ANADV)
+		anadv_reg &^= TXCW_ASM_DIR | TXCW_PAUSE
+
+		switch hw.FC.RequestedMode {
+		case FCModeFull, FCModeRxPause:
+			anadv_reg |= TXCW_ASM_DIR
+			anadv_reg |= TXCW_PAUSE
+		case FCModeTxPause:
+			anadv_reg |= TXCW_ASM_DIR
+		}
+
+		hw.RegWrite(PCS_ANADV, anadv_reg)
+	} else {
+		// Set PCS register for forced link
+		reg |= PCS_LCTL_FSD // Force Speed
+
+		// Force flow control for forced link
+		reg |= PCS_LCTL_FORCE_FCTRL
+	}
+
+	hw.RegWrite(PCS_LCTL, reg)
+
+	if !pcs_autoneg && !SGMIIActive82575(hw) {
+		ForceMACFC(hw)
+	}
 	return nil
 }
 

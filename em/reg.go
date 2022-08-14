@@ -589,6 +589,12 @@ const (
 	VFTA_BLOCK_SIZE = 8
 )
 
+// SCTL
+const (
+	SCTL_DISABLE_SERDES_LOOPBACK uint32 = 0x0400
+	SCTL_ENABLE_SERDES_LOOPBACK  uint32 = 0x0410
+)
+
 // SerDes Control
 const (
 	GEN_CTL_READY uint32 = 0x80000000
