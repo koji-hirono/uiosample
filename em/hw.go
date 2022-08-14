@@ -168,7 +168,7 @@ func SetupInitFuncs(hw *HW, initdev bool) error {
 	case MACTypeIch8lan, MACTypeIch9lan, MACTypeIch10lan, MACTypePchlan, MACTypePch2lan, MACTypePch_lpt, MACTypePch_spt, MACTypePch_cnp, MACTypePch_adp:
 		//ICH8lanInit(hw)
 	case MACType82575, MACType82576, MACType82580, MACTypeI350, MACTypeI354:
-		//I82575Init(hw)
+		I82575Init(hw)
 	case MACTypeI210, MACTypeI211:
 		//I210Init(hw)
 	case MACTypeVfadapt:
