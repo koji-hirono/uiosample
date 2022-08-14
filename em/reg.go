@@ -83,6 +83,9 @@ const (
 	// Packet Buffer Allocation - RW
 	PBA = 0x1000
 
+	// MNG EEprom Control
+	EEMNGCTL = 0x1010
+
 	// SFPI2C Command Register - RW
 	I2CCMD = 0x1028
 
@@ -725,6 +728,14 @@ const (
 	MDICNFG_PHY_MASK uint32 = 0x03E00000
 
 	MDICNFG_PHY_SHIFT = 21
+)
+
+// EEMNGCTL
+const (
+	NVM_CFG_DONE_PORT_0 uint32 = 0x040000 // MNG config cycle done
+	NVM_CFG_DONE_PORT_1 uint32 = 0x080000 // ...for second port
+	NVM_CFG_DONE_PORT_2 uint32 = 0x100000 // ...for third port
+	NVM_CFG_DONE_PORT_3 uint32 = 0x200000 // ...for fourth port
 )
 
 // I2CCMD

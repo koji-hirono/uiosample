@@ -153,7 +153,31 @@ func (p *I82575PHY) GetCableLength() error {
 }
 
 func (p *I82575PHY) GetCfgDone() error {
-	// e1000_get_cfg_done_82575
+	hw := p.hw
+	var mask uint32
+	switch hw.Bus.Func {
+	case 1:
+		mask = NVM_CFG_DONE_PORT_1
+	case 2:
+		mask = NVM_CFG_DONE_PORT_2
+	case 3:
+		mask = NVM_CFG_DONE_PORT_3
+	default:
+		mask = NVM_CFG_DONE_PORT_0
+	}
+	timeout := PHY_CFG_TIMEOUT
+	for timeout > 0 {
+		if hw.RegRead(EEMNGCTL)&mask != 0 {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+		timeout--
+	}
+
+	// If EEPROM is not marked present, init the PHY manually
+	if hw.RegRead(EECD)&EECD_PRES == 0 && hw.PHY.PHYType == PHYTypeIgp3 {
+		PHYInitScriptIGP3(hw)
+	}
 	return nil
 }
 

@@ -116,3 +116,75 @@ func GetCableLengthIGP2(hw *HW) error {
 func GetPHYInfoIGP(hw *HW) error {
 	return nil
 }
+
+func PHYInitScriptIGP3(hw *HW) error {
+	phy := &hw.PHY
+	// PHY init IGP 3
+	// Enable rise/fall, 10-mode work in class-A
+	phy.Op.WriteReg(0x2F5B, 0x9018)
+	// Remove all caps from Replica path filter
+	phy.Op.WriteReg(0x2F52, 0x0000)
+	// Bias trimming for ADC, AFE and Driver (Default)
+	phy.Op.WriteReg(0x2FB1, 0x8B24)
+	// Increase Hybrid poly bias
+	phy.Op.WriteReg(0x2FB2, 0xF8F0)
+	// Add 4% to Tx amplitude in Gig mode
+	phy.Op.WriteReg(0x2010, 0x10B0)
+	// Disable trimming (TTT)
+	phy.Op.WriteReg(0x2011, 0x0000)
+	// Poly DC correction to 94.6% + 2% for all channels
+	phy.Op.WriteReg(0x20DD, 0x249A)
+	// ABS DC correction to 95.9%
+	phy.Op.WriteReg(0x20DE, 0x00D3)
+	// BG temp curve trim
+	phy.Op.WriteReg(0x28B4, 0x04CE)
+	// Increasing ADC OPAMP stage 1 currents to max
+	phy.Op.WriteReg(0x2F70, 0x29E4)
+	// Force 1000 ( required for enabling PHY regs configuration)
+	phy.Op.WriteReg(0x0000, 0x0140)
+	// Set upd_freq to 6
+	phy.Op.WriteReg(0x1F30, 0x1606)
+	// Disable NPDFE
+	phy.Op.WriteReg(0x1F31, 0xB814)
+	// Disable adaptive fixed FFE (Default)
+	phy.Op.WriteReg(0x1F35, 0x002A)
+	// Enable FFE hysteresis
+	phy.Op.WriteReg(0x1F3E, 0x0067)
+	// Fixed FFE for short cable lengths
+	phy.Op.WriteReg(0x1F54, 0x0065)
+	// Fixed FFE for medium cable lengths
+	phy.Op.WriteReg(0x1F55, 0x002A)
+	// Fixed FFE for long cable lengths
+	phy.Op.WriteReg(0x1F56, 0x002A)
+	// Enable Adaptive Clip Threshold
+	phy.Op.WriteReg(0x1F72, 0x3FB0)
+	// AHT reset limit to 1
+	phy.Op.WriteReg(0x1F76, 0xC0FF)
+	// Set AHT master delay to 127 msec
+	phy.Op.WriteReg(0x1F77, 0x1DEC)
+	// Set scan bits for AHT
+	phy.Op.WriteReg(0x1F78, 0xF9EF)
+	// Set AHT Preset bits
+	phy.Op.WriteReg(0x1F79, 0x0210)
+	// Change integ_factor of channel A to 3
+	phy.Op.WriteReg(0x1895, 0x0003)
+	// Change prop_factor of channels BCD to 8
+	phy.Op.WriteReg(0x1796, 0x0008)
+	// Change cg_icount + enable integbp for channels BCD
+	phy.Op.WriteReg(0x1798, 0xD008)
+	// Change cg_icount + enable integbp + change prop_factor_master
+	// to 8 for channel A
+	phy.Op.WriteReg(0x1898, 0xD918)
+	// Disable AHT in Slave mode on channel A
+	phy.Op.WriteReg(0x187A, 0x0800)
+	// Enable LPLU and disable AN to 1000 in non-D0a states,
+	// Enable SPD+B2B
+	phy.Op.WriteReg(0x0019, 0x008D)
+	// Enable restart AN on an1000_dis change
+	phy.Op.WriteReg(0x001B, 0x2080)
+	// Enable wh_fifo read clock in 10/100 modes
+	phy.Op.WriteReg(0x0014, 0x0045)
+	// Restart AN, Speed selection is 1000
+	phy.Op.WriteReg(0x0000, 0x1340)
+	return nil
+}
