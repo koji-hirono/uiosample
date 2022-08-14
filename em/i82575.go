@@ -1,5 +1,10 @@
 package em
 
+import (
+	"errors"
+	"time"
+)
+
 // SFP modules ID memory locations
 const (
 	SFF_IDENTIFIER_OFFSET = 0x00
@@ -43,6 +48,45 @@ func I82575Init(hw *HW) {
 	hw.MAC.Op = mac
 	hw.PHY.Op = phy
 	hw.NVM.Op = nvm
+}
+
+func AcquireSWFWSync82575(hw *HW, mask uint16) error {
+	swmask := uint32(mask)
+	fwmask := uint32(mask) << 16
+	timeout := 200
+	for i := 0; i < timeout; i++ {
+		err := GetHWSemaphore(hw)
+		if err != nil {
+			return err
+		}
+		swfw_sync := hw.RegRead(SW_FW_SYNC)
+		if swfw_sync&(fwmask|swmask) == 0 {
+			swfw_sync |= swmask
+			hw.RegWrite(SW_FW_SYNC, swfw_sync)
+			PutHWSemaphore(hw)
+			return nil
+		}
+		// Firmware currently using resource (fwmask)
+		// or other software thread using resource (swmask)
+		PutHWSemaphore(hw)
+		time.Sleep(5 * time.Millisecond)
+	}
+	return errors.New("SW_FW_SYNC timeout")
+}
+
+func ReleaseSWFWSync82575(hw *HW, mask uint16) {
+	for {
+		err := GetHWSemaphore(hw)
+		if err == nil {
+			break
+		}
+	}
+
+	swfw_sync := hw.RegRead(SW_FW_SYNC)
+	swfw_sync &^= uint32(mask)
+	hw.RegWrite(SW_FW_SYNC, swfw_sync)
+
+	PutHWSemaphore(hw)
 }
 
 func SGMIIActive82575(hw *HW) bool {

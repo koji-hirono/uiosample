@@ -177,3 +177,51 @@ func SetD3LpluState82580(hw *HW, active bool) error {
 	hw.RegWrite(I82580_PHY_POWER_MGMT, data)
 	return nil
 }
+
+func UpdateNVMChecksum82580(hw *HW) error {
+	nvm := &hw.NVM
+	var data [1]uint16
+	err := nvm.Op.Read(NVM_COMPATIBILITY_REG_3, data[:])
+	if err != nil {
+		return err
+	}
+	if data[0]&NVM_COMPATIBILITY_BIT_MASK == 0 {
+		// set compatibility bit to validate checksums appropriately */
+		data[0] |= NVM_COMPATIBILITY_BIT_MASK
+		err := nvm.Op.Write(NVM_COMPATIBILITY_REG_3, data[:])
+		if err != nil {
+			return err
+		}
+	}
+	for i := 0; i < 4; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := UpdateChecksumWithOffset(hw, offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ValidateNVMChecksum82580(hw *HW) error {
+	nvm := &hw.NVM
+	var data [1]uint16
+	err := nvm.Op.Read(NVM_COMPATIBILITY_REG_3, data[:])
+	if err != nil {
+		return err
+	}
+	n := 1
+	if data[0]&NVM_COMPATIBILITY_BIT_MASK != 0 {
+		// if chekcsums compatibility bit is set validate checksums
+		// for all 4 ports.
+		n = 4
+	}
+	for i := 0; i < n; i++ {
+		offset := NVM_82580_LAN_FUNC_OFFSET(uint16(i))
+		err := ValidateChecksumWithOffset(hw, offset)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
