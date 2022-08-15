@@ -376,7 +376,7 @@ func PHYHasLink(hw *HW, n int, interval time.Duration) (bool, error) {
 		}
 		time.Sleep(interval * time.Microsecond)
 	}
-	return false, errors.New("retry timeout")
+	return false, nil
 }
 
 func PHYResetDSP(hw *HW) error {
