@@ -31,7 +31,7 @@ func NewI82575MAC(hw *HW, nvm *I82575NVM, phy *I82575PHY) *I82575MAC {
 
 func (m *I82575MAC) InitParams() error {
 	mac := &m.hw.MAC
-	spec := m.hw.Spec.(I82575DeviceSpec)
+	spec := m.hw.Spec.(*I82575DeviceSpec)
 
 	// Derives media type
 	m.getMediaType()
@@ -703,7 +703,7 @@ func (m *I82575MAC) setupCopperLink() error {
 func (m *I82575MAC) getMediaType() error {
 	hw := m.hw
 	phy := &hw.PHY
-	spec := hw.Spec.(I82575DeviceSpec)
+	spec := hw.Spec.(*I82575DeviceSpec)
 
 	// Set internal phy as default
 	spec.SGMIIActive = false
@@ -763,7 +763,7 @@ func (m *I82575MAC) getMediaType() error {
 func (m *I82575MAC) setSFPMediaType() error {
 	hw := m.hw
 	phy := &hw.PHY
-	spec := hw.Spec.(I82575DeviceSpec)
+	spec := hw.Spec.(*I82575DeviceSpec)
 
 	// Turn I2C interface ON and power on sfp cage
 	ctrl := hw.RegRead(CTRL_EXT)
