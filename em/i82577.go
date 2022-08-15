@@ -1,6 +1,7 @@
 package em
 
 import (
+	"errors"
 	"time"
 )
 
@@ -101,6 +102,20 @@ func PHYForceSpeedDuplex82577(hw *HW) error {
 }
 
 func GetCableLength82577(hw *HW) error {
+	phy := &hw.PHY
+	data, err := phy.Op.ReadReg(I82577_PHY_DIAG_STATUS)
+	if err != nil {
+		return err
+	}
+
+	data &= I82577_DSTATUS_CABLE_LENGTH
+	data >>= I82577_DSTATUS_CABLE_LENGTH_SHIFT
+	if data == CABLE_LENGTH_UNDEFINED {
+		return errors.New("undefined length")
+	}
+
+	phy.CableLength = data
+
 	return nil
 }
 
