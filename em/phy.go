@@ -864,3 +864,45 @@ func SetD3LpluState(hw *HW, active bool) error {
 	}
 	return nil
 }
+
+func PHYForceSpeedDuplexSetup(hw *HW, phyctrl uint16) uint16 {
+	mac := &hw.MAC
+	fc := &hw.FC
+	// Turn off flow control when forcing speed/duplex
+	fc.CurrentMode = FCModeNone
+
+	// Force speed/duplex on the mac
+	ctrl := hw.RegRead(CTRL)
+	ctrl |= CTRL_FRCSPD | CTRL_FRCDPX
+	ctrl &^= CTRL_SPD_SEL
+
+	// Disable Auto Speed Detection
+	ctrl &^= CTRL_ASDE
+
+	// Disable autoneg on the phy
+	phyctrl &^= MII_CR_AUTO_NEG_EN
+
+	// Forcing Full or Half Duplex?
+	if mac.ForcedSpeedDuplex&ALL_HALF_DUPLEX != 0 {
+		ctrl &^= CTRL_FD
+		phyctrl &^= MII_CR_FULL_DUPLEX
+	} else {
+		ctrl |= CTRL_FD
+		phyctrl |= MII_CR_FULL_DUPLEX
+	}
+
+	// Forcing 10mb or 100mb?
+	if mac.ForcedSpeedDuplex&ALL_100_SPEED != 0 {
+		ctrl |= CTRL_SPD_100
+		phyctrl |= MII_CR_SPEED_100
+		phyctrl &^= MII_CR_SPEED_1000
+	} else {
+		ctrl &^= CTRL_SPD_1000 | CTRL_SPD_100
+		phyctrl &^= MII_CR_SPEED_1000 | MII_CR_SPEED_100
+	}
+
+	mac.Op.ConfigCollisionDist()
+
+	hw.RegWrite(CTRL, ctrl)
+	return phyctrl
+}
