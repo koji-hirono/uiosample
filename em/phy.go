@@ -338,7 +338,6 @@ func PHYHWReset(hw *HW) error {
 	if err != nil {
 		return err
 	}
-	defer phy.Op.Release()
 
 	ctrl := hw.RegRead(CTRL)
 	hw.RegWrite(CTRL, ctrl|CTRL_PHY_RST)
@@ -348,6 +347,8 @@ func PHYHWReset(hw *HW) error {
 
 	hw.RegWrite(CTRL, ctrl)
 	hw.RegWriteFlush()
+
+	phy.Op.Release()
 
 	time.Sleep(150 * time.Microsecond)
 
