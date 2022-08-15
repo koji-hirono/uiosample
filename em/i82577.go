@@ -1,5 +1,9 @@
 package em
 
+import (
+	"time"
+)
+
 func CopperLinkSetup82577(hw *HW) error {
 	phy := &hw.PHY
 	if phy.PHYType == PHYType82580 {
@@ -65,6 +69,34 @@ func CheckPolarity82577(hw *HW) error {
 }
 
 func PHYForceSpeedDuplex82577(hw *HW) error {
+	phy := &hw.PHY
+
+	data, err := phy.Op.ReadReg(PHY_CONTROL)
+	if err != nil {
+		return err
+	}
+
+	data = PHYForceSpeedDuplexSetup(hw, data)
+
+	err = phy.Op.WriteReg(PHY_CONTROL, data)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1 * time.Microsecond)
+
+	if phy.AutonegWaitToComplete {
+		_, err := PHYHasLink(hw, PHY_FORCE_LIMIT, 100000)
+		if err != nil {
+			return err
+		}
+		// Try once more
+		_, err = PHYHasLink(hw, PHY_FORCE_LIMIT, 100000)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
