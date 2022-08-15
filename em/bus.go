@@ -182,6 +182,16 @@ func SetLANIDMultiPortPCI(hw *HW) {
 	bus.Func = 0
 }
 
+func SetLANIDMultiPortPCIE(hw *HW) {
+	bus := &hw.Bus
+	// The status register reports the correct function number
+	// for the device regardless of function swap state.
+	reg := hw.RegRead(STATUS)
+	reg &= STATUS_FUNC_MASK
+	reg >>= STATUS_FUNC_SHIFT
+	bus.Func = uint16(reg)
+}
+
 func WritePCICfg(hw *HW, reg uint32, value uint16) {
 }
 

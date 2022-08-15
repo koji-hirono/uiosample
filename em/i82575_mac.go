@@ -193,7 +193,7 @@ func (m *I82575MAC) GetBusInfo() error {
 }
 
 func (m *I82575MAC) SetLANID() {
-	SetLANIDMultiPortPCI(m.hw)
+	SetLANIDMultiPortPCIE(m.hw)
 }
 
 func (m *I82575MAC) GetLinkUpInfo() (uint16, uint16, error) {
