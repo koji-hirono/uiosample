@@ -684,7 +684,7 @@ func (m *I82575MAC) setupCopperLink() error {
 			}
 		}
 	case PHYTypeIgp3:
-		err := CopperLinkSetupIgp(m.hw)
+		err := CopperLinkSetupIGP(m.hw)
 		if err != nil {
 			return err
 		}
