@@ -120,5 +120,56 @@ func GetCableLength82577(hw *HW) error {
 }
 
 func GetPHYInfo82577(hw *HW) error {
+	phy := &hw.PHY
+	link, err := PHYHasLink(hw, 1, 0)
+	if err != nil {
+		return err
+	}
+	if !link {
+		return errors.New("link down")
+	}
+
+	phy.PolarityCorrection = true
+
+	err = CheckPolarity82577(hw)
+	if err != nil {
+		return err
+	}
+
+	data, err := phy.Op.ReadReg(I82577_PHY_STATUS_2)
+	if err != nil {
+		return err
+	}
+
+	phy.IsMDIX = data&I82577_PHY_STATUS2_MDIX != 0
+
+	if data&I82577_PHY_STATUS2_SPEED_MASK == I82577_PHY_STATUS2_SPEED_1000MBPS {
+		err := phy.Op.GetCableLength()
+		if err != nil {
+			return err
+		}
+
+		data, err := phy.Op.ReadReg(PHY_1000T_STATUS)
+		if err != nil {
+			return err
+		}
+
+		if data&SR_1000T_LOCAL_RX_STATUS != 0 {
+			phy.LocalRx = E1000TRxStatusOk
+		} else {
+			phy.LocalRx = E1000TRxStatusNotOk
+		}
+
+		if data&SR_1000T_REMOTE_RX_STATUS != 0 {
+			phy.RemoteRx = E1000TRxStatusOk
+		} else {
+			phy.RemoteRx = E1000TRxStatusNotOk
+		}
+	} else {
+		phy.CableLength = CABLE_LENGTH_UNDEFINED
+		phy.LocalRx = E1000TRxStatusUndefined
+		phy.RemoteRx = E1000TRxStatusUndefined
+	}
+
 	return nil
 }
