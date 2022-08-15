@@ -179,7 +179,15 @@ func GetBusInfoPCIE(hw *HW) error {
 
 func SetLANIDMultiPortPCI(hw *HW) {
 	bus := &hw.Bus
-	bus.Func = 0
+	ht := ReadPCICfg(hw, PCI_HEADER_TYPE_REGISTER)
+	if ht&PCI_HEADER_TYPE_MULTIFUNC != 0 {
+		reg := hw.RegRead(STATUS)
+		reg &= STATUS_FUNC_MASK
+		reg >>= STATUS_FUNC_SHIFT
+		bus.Func = uint16(reg)
+	} else {
+		bus.Func = 0
+	}
 }
 
 func SetLANIDMultiPortPCIE(hw *HW) {
