@@ -248,7 +248,7 @@ func GetCableLengthM88(hw *HW) error {
 
 	index := int(data & M88E1000_PSSR_CABLE_LENGTH)
 	index >>= M88E1000_PSSR_CABLE_LENGTH_SHIFT
-	if index >= len(m88CableLengthTable)-1 {
+	if index >= len(m88CableLengthTable) {
 		return errors.New("invalid index")
 	}
 
@@ -259,6 +259,89 @@ func GetCableLengthM88(hw *HW) error {
 }
 
 func GetCableLengthM88gen2(hw *HW) error {
+	phy := &hw.PHY
+	switch phy.ID {
+	case I210_I_PHY_ID:
+		// Get cable length from PHY Cable Diagnostics Control Reg
+		length, err := phy.Op.ReadReg((0x7 << GS40G_PAGE_SHIFT) + (I347AT4_PCDL + phy.Addr))
+		if err != nil {
+			return err
+		}
+		// Check if the unit of cable length is meters or cm
+		unit, err := phy.Op.ReadReg((0x7 << GS40G_PAGE_SHIFT) + I347AT4_PCDC)
+		if err != nil {
+			return err
+		}
+		if unit&I347AT4_PCDC_CABLE_LENGTH_UNIT == 0 {
+			length /= 100
+		}
+		// Populate the phy structure with cable length in meters
+		phy.MinCableLength = length
+		phy.MaxCableLength = length
+		phy.CableLength = length
+	case M88E1543_E_PHY_ID, M88E1512_E_PHY_ID, M88E1340M_E_PHY_ID, I347AT4_E_PHY_ID:
+		// Remember the original page select and set it to 7
+		defpage, err := phy.Op.ReadReg(I347AT4_PAGE_SELECT)
+		if err != nil {
+			return err
+		}
+		err = phy.Op.WriteReg(I347AT4_PAGE_SELECT, 0x07)
+		if err != nil {
+			return err
+		}
+		// Get cable length from PHY Cable Diagnostics Control Reg
+		length, err := phy.Op.ReadReg(I347AT4_PCDL + phy.Addr)
+		if err != nil {
+			return err
+		}
+		// Check if the unit of cable length is meters or cm
+		unit, err := phy.Op.ReadReg(I347AT4_PCDC)
+		if err != nil {
+			return err
+		}
+		if unit&I347AT4_PCDC_CABLE_LENGTH_UNIT == 0 {
+			length /= 100
+		}
+		// Populate the phy structure with cable length in meters
+		phy.MinCableLength = length
+		phy.MaxCableLength = length
+		phy.CableLength = length
+
+		// Reset the page select to its original value
+		err = phy.Op.WriteReg(I347AT4_PAGE_SELECT, defpage)
+		if err != nil {
+			return err
+		}
+	case M88E1112_E_PHY_ID:
+		// Remember the original page select and set it to 5
+		defpage, err := phy.Op.ReadReg(I347AT4_PAGE_SELECT)
+		if err != nil {
+			return err
+		}
+		err = phy.Op.WriteReg(I347AT4_PAGE_SELECT, 0x05)
+		if err != nil {
+			return err
+		}
+		data, err := phy.Op.ReadReg(M88E1112_VCT_DSP_DISTANCE)
+		if err != nil {
+			return err
+		}
+		data &= M88E1000_PSSR_CABLE_LENGTH
+		data >>= M88E1000_PSSR_CABLE_LENGTH_SHIFT
+		if int(data) >= len(m88CableLengthTable) {
+			return errors.New("over table size")
+		}
+		phy.MinCableLength = m88CableLengthTable[data]
+		phy.MaxCableLength = m88CableLengthTable[data+1]
+		phy.CableLength = (phy.MinCableLength + phy.MaxCableLength) / 2
+		// Reset the page select to its original value */
+		err = phy.Op.WriteReg(I347AT4_PAGE_SELECT, defpage)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New("not support")
+	}
 	return nil
 }
 
