@@ -51,6 +51,16 @@ func CopperLinkSetup82577(hw *HW) error {
 }
 
 func CheckPolarity82577(hw *HW) error {
+	phy := &hw.PHY
+	data, err := phy.Op.ReadReg(I82577_PHY_STATUS_2)
+	if err != nil {
+		return err
+	}
+	if data&I82577_PHY_STATUS2_REV_POLARITY != 0 {
+		phy.CablePolarity = RevPolarityReversed
+	} else {
+		phy.CablePolarity = RevPolarityNormal
+	}
 	return nil
 }
 
