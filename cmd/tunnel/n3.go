@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"net"
 
 	"uiosample/hugetlb"
 	"uiosample/znet"
@@ -40,7 +40,7 @@ func (s *Server) procN3ICMP(eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte
 func (s *Server) procN3UDP(eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte) error {
 	n := 0
 	udp, m := znet.DecodeUDPHdr(payload)
-	if !MatchTunnel(ip, udp) {
+	if !s.MatchN3Tunnel(ip, udp) {
 		return nil
 	}
 	n += m
@@ -60,14 +60,36 @@ func (s *Server) procN3UDP(eth *znet.EtherHdr, ip *znet.IPv4Hdr, payload []byte)
 	innerip, m := znet.DecodeIPv4Hdr(payload[n:])
 	n += m
 
-	if !MatchN3PDR(gtp, gtpext, innerip) {
+	key := &PDRKey{
+		Outer: &PDROuterKey{
+			IP:   ip,
+			UDP:  udp,
+			GTP:  gtp,
+			Sess: gtpext,
+		},
+		IP: innerip,
+	}
+	pdr := s.pdrtbl.Find(key)
+	if pdr == nil {
 		return nil
 	}
-
-	return s.procN3FAR(gtp, innerip, payload[n:])
+	far := s.fartbl.Get(pdr.SEID, pdr.FARID)
+	if far == nil {
+		return nil
+	}
+	if far.Action&ApplyActionDROP != 0 {
+		return nil
+	} else if far.Action&ApplyActionFORW != 0 {
+		return s.procN3FAR(far, gtp, innerip, payload[n:])
+	} else if far.Action&ApplyActionBUFF != 0 {
+		// TODO
+		return nil
+	} else {
+		return nil
+	}
 }
 
-func (s *Server) procN3FAR(gtp *znet.GTPv1Hdr, ip *znet.IPv4Hdr, payload []byte) error {
+func (s *Server) procN3FAR(far *FAR, gtp *znet.GTPv1Hdr, ip *znet.IPv4Hdr, payload []byte) error {
 	dstmac, ok := LookupMAC(ip.Dst[:])
 	if !ok {
 		// TODO: wait for ARP reply
@@ -101,27 +123,11 @@ func (s *Server) procN3FAR(gtp *znet.GTPv1Hdr, ip *znet.IPv4Hdr, payload []byte)
 	return nil
 }
 
-func MatchTunnel(ip *znet.IPv4Hdr, udp *znet.UDPHdr) bool {
-	if udp.SrcPort.Get() != 2152 {
+func (s *Server) MatchN3Tunnel(ip *znet.IPv4Hdr, udp *znet.UDPHdr) bool {
+	if udp.DstPort.Get() != s.GTPPort {
 		return false
 	}
-	if udp.DstPort.Get() != 2152 {
-		return false
-	}
-	if !bytes.Equal(ip.Src[:], []byte{30, 30, 0, 2}) {
-		return false
-	}
-	if !bytes.Equal(ip.Dst[:], []byte{30, 30, 0, 1}) {
-		return false
-	}
-	return true
-}
-
-func MatchN3PDR(gtp *znet.GTPv1Hdr, gtpext *znet.GTPExtPDUSess, ip *znet.IPv4Hdr) bool {
-	if gtp.TEID.Get() != 78 {
-		return false
-	}
-	if !bytes.Equal(ip.Src[:], []byte{60, 60, 0, 2}) {
+	if !s.GTPAddr.Equal(net.IP(ip.Dst[:])) {
 		return false
 	}
 	return true

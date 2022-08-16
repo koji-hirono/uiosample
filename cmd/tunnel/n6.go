@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-
 	"uiosample/hugetlb"
 	"uiosample/znet"
 )
@@ -25,18 +23,42 @@ func (s *Server) procN6ARP(eth *znet.EtherHdr, payload []byte) error {
 func (s *Server) procN6IPv4(eth *znet.EtherHdr, payload []byte) error {
 	ip, n := znet.DecodeIPv4Hdr(payload)
 
-	if !MatchN6PDR(ip) {
+	key := &PDRKey{IP: ip}
+	pdr := s.pdrtbl.Find(key)
+	if pdr == nil {
 		return nil
 	}
-
-	return s.procN6FAR(ip, payload[n:])
+	qer := s.qertbl.Get(pdr.SEID, pdr.QERID)
+	far := s.fartbl.Get(pdr.SEID, pdr.FARID)
+	if far == nil {
+		return nil
+	}
+	if far.Action&ApplyActionDROP != 0 {
+		return nil
+	} else if far.Action&ApplyActionFORW != 0 {
+		param := far.Param
+		if param == nil {
+			return nil
+		}
+		creation := param.Creation
+		if creation == nil {
+			return nil
+		}
+		return s.procN6FAR(far, qer, ip, payload[n:])
+	} else if far.Action&ApplyActionBUFF != 0 {
+		// TODO:
+		return nil
+	} else {
+		return nil
+	}
 }
 
-func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
-	dstmac, ok := LookupMAC([]byte{30, 30, 0, 2})
+func (s *Server) procN6FAR(far *FAR, qer *QER, ip *znet.IPv4Hdr, payload []byte) error {
+	creation := far.Param.Creation
+	dstmac, ok := LookupMAC(creation.PeerAddr)
 	if !ok {
 		// TODO: wait for ARP reply
-		sendARPRequest(s.port1, []byte{30, 30, 0, 2}, []byte{30, 30, 0, 1})
+		sendARPRequest(s.port1, creation.PeerAddr, s.GTPAddr)
 		return nil
 	}
 
@@ -66,15 +88,15 @@ func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
 	outerip.TTL.Set(64)
 	outerip.Proto.Set(znet.IPProtoUDP)
 	outerip.Chksum.Set(0)
-	outerip.Src.Set([]byte{30, 30, 0, 1})
-	outerip.Dst.Set([]byte{30, 30, 0, 2})
+	outerip.Src.Set(s.GTPAddr)
+	outerip.Dst.Set(creation.PeerAddr)
 	n += m
 
 	// udp
 	offudp := n
 	udp, m := znet.DecodeUDPHdr(b[n:])
-	udp.SrcPort.Set(2152)
-	udp.DstPort.Set(2152)
+	udp.SrcPort.Set(s.GTPPort)
+	udp.DstPort.Set(creation.Port)
 	udp.Length.Set(0)
 	udp.Chksum.Set(0)
 	n += m
@@ -85,24 +107,29 @@ func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
 	gtp.Flags.Set(1<<5 | 1<<4 | 1<<2)
 	gtp.Type.Set(znet.GTPTypeTPDU)
 	gtp.Length.Set(0)
-	gtp.TEID.Set(87)
+	gtp.TEID.Set(creation.TEID)
 	gtp.Seq.Set(0)
 	gtp.NPDU.Set(0)
-	gtp.Ext.Set(znet.GTPExtTypePDUSess)
-	n += m
+	if qer != nil {
+		gtp.Ext.Set(znet.GTPExtTypePDUSess)
+		n += m
 
-	// ext length
-	b[n] = 1
-	n++
+		// ext length
+		b[n] = 1
+		n++
 
-	// gtp ext
-	gtpext, m := znet.DecodeGTPExtPDUSess(b[n:])
-	gtpext.TypeSpare.Set(znet.GTPPDUTypeDL << 4)
-	gtpext.FlagsQFI.Set(9)
-	n += m
+		// gtp ext
+		gtpext, m := znet.DecodeGTPExtPDUSess(b[n:])
+		gtpext.TypeSpare.Set(znet.GTPPDUTypeDL << 4)
+		gtpext.FlagsQFI.Set(qer.QFI)
+		n += m
 
-	b[n] = znet.GTPExtTypeNone
-	n++
+		b[n] = znet.GTPExtTypeNone
+		n++
+	} else {
+		gtp.Ext.Set(znet.GTPExtTypeNone)
+		n += m
+	}
 
 	m = copy(b[n:], ip.Bytes())
 	n += m
@@ -126,11 +153,4 @@ func (s *Server) procN6FAR(ip *znet.IPv4Hdr, payload []byte) error {
 	}
 
 	return nil
-}
-
-func MatchN6PDR(ip *znet.IPv4Hdr) bool {
-	if !bytes.Equal(ip.Dst[:], []byte{60, 60, 0, 2}) {
-		return false
-	}
-	return true
 }
