@@ -41,7 +41,7 @@ func main() {
 	hugetlb.SetPages(128)
 	hugetlb.Init()
 
-	c, err := pci.OpenConfig(0)
+	c, err := pci.OpenConfig(addr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,8 +80,8 @@ func main() {
 
 	// rxn >= 8
 	// txn >= 8
-	rxn := 32
-	txn := 32
+	rxn := 64
+	txn := 64
 
 	rxconfig := &ethdev.RxConfig{}
 	err = d.RxQueueSetup(0, rxn, rxconfig)
@@ -95,7 +95,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	d.Start()
+	err = d.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("start.")
 	defer d.Stop()
 
@@ -162,17 +165,23 @@ func Serve(port ethdev.Port, sig chan os.Signal) {
 	}
 }
 
-func PrintCounters(g *ethdev.CounterGroup) {
-	fmt.Printf("RxPackets: %v\n", g.RxPackets.Value())
-	fmt.Printf("TxPackets: %v\n", g.TxPackets.Value())
-	fmt.Printf("RxOctets : %v\n", g.RxOctets.Value())
-	fmt.Printf("TxOctets : %v\n", g.TxOctets.Value())
-	fmt.Printf("RxMissed : %v\n", g.RxMissed.Value())
-	fmt.Printf("RxErrors : %v\n", g.RxErrors.Value())
-	fmt.Printf("TxErrors : %v\n", g.TxErrors.Value())
+func PrintCounter(name string, c ethdev.Counter) {
+	if c == nil {
+		return
+	}
+	fmt.Printf("%s: %v\n", name, c.Value())
+}
 
+func PrintCounters(g *ethdev.CounterGroup) {
+	PrintCounter("RxPackets", g.RxPackets)
+	PrintCounter("TxPackets", g.TxPackets)
+	PrintCounter("RxOctets ", g.RxOctets)
+	PrintCounter("TxOctets ", g.TxOctets)
+	PrintCounter("RxMissed ", g.RxMissed)
+	PrintCounter("RxErrors ", g.RxErrors)
+	PrintCounter("TxErrors ", g.TxErrors)
 	for name, c := range g.Ext {
-		fmt.Printf("%s: %v\n", name, c.Value())
+		PrintCounter(name, c)
 	}
 }
 
