@@ -12,8 +12,8 @@ type Port struct {
 	driver ethdev.Port
 }
 
-func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
-	c, err := pci.OpenConfig(unit)
+func OpenPort(addr *pci.Addr) (*Port, error) {
+	c, err := pci.OpenConfig(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,13 @@ func OpenPort(unit int, addr *pci.Addr) (*Port, error) {
 		return nil, err
 	}
 
-	driver.Start()
+	err = driver.Start()
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
 
 	driver.SetPromisc(true, true)
 

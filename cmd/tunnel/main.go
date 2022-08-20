@@ -32,13 +32,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	port1, err := OpenPort(0, addr1)
+	port1, err := OpenPort(addr1)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer port1.Close()
 
-	port2, err := OpenPort(1, addr2)
+	port2, err := OpenPort(addr2)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,16 +57,22 @@ func main() {
 	hugetlb.Stat()
 }
 
-func PrintCounters(g *ethdev.CounterGroup) {
-	fmt.Printf("RxPackets: %v\n", g.RxPackets.Value())
-	fmt.Printf("TxPackets: %v\n", g.TxPackets.Value())
-	fmt.Printf("RxOctets : %v\n", g.RxOctets.Value())
-	fmt.Printf("TxOctets : %v\n", g.TxOctets.Value())
-	fmt.Printf("RxMissed : %v\n", g.RxMissed.Value())
-	fmt.Printf("RxErrors : %v\n", g.RxErrors.Value())
-	fmt.Printf("TxErrors : %v\n", g.TxErrors.Value())
+func PrintCounter(name string, c ethdev.Counter) {
+	if c == nil {
+		return
+	}
+	fmt.Printf("%s: %v\n", name, c.Value())
+}
 
+func PrintCounters(g *ethdev.CounterGroup) {
+	PrintCounter("RxPackets", g.RxPackets)
+	PrintCounter("TxPackets", g.TxPackets)
+	PrintCounter("RxOctets ", g.RxOctets)
+	PrintCounter("TxOctets ", g.TxOctets)
+	PrintCounter("RxMissed ", g.RxMissed)
+	PrintCounter("RxErrors ", g.RxErrors)
+	PrintCounter("TxErrors ", g.TxErrors)
 	for name, c := range g.Ext {
-		fmt.Printf("%s: %v\n", name, c.Value())
+		PrintCounter(name, c)
 	}
 }
