@@ -29,8 +29,8 @@ type Device struct {
 	driver ethdev.Port
 }
 
-func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
-	c, err := pci.OpenConfig(unit)
+func OpenDevice(addr *pci.Addr) (*Device, error) {
+	c, err := pci.OpenConfig(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,13 @@ func OpenDevice(unit int, addr *pci.Addr) (*Device, error) {
 		return nil, err
 	}
 
-	driver.Start()
+	err = driver.Start()
+	if err != nil {
+		driver.Close()
+		dev.Close()
+		c.Close()
+		return nil, err
+	}
 
 	mac, _ := driver.GetMACAddr()
 	log.Printf("MAC Address: %x\n", mac)
@@ -146,19 +152,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dev1, err := OpenDevice(0, addr1)
+	dev1, err := OpenDevice(addr1)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev1.Close()
-	log.Println("device 0 open.")
+	log.Printf("device %v open.\n", addr1)
 
-	dev2, err := OpenDevice(1, addr2)
+	dev2, err := OpenDevice(addr2)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer dev2.Close()
-	log.Println("device 1 open.")
+	log.Println("device %v open.\n", addr2)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
@@ -211,16 +217,22 @@ func Serve(d1 ethdev.Port, d2 ethdev.Port, sig chan os.Signal) {
 	}
 }
 
-func PrintCounters(g *ethdev.CounterGroup) {
-	fmt.Printf("RxPackets: %v\n", g.RxPackets.Value())
-	fmt.Printf("TxPackets: %v\n", g.TxPackets.Value())
-	fmt.Printf("RxOctets : %v\n", g.RxOctets.Value())
-	fmt.Printf("TxOctets : %v\n", g.TxOctets.Value())
-	fmt.Printf("RxMissed : %v\n", g.RxMissed.Value())
-	fmt.Printf("RxErrors : %v\n", g.RxErrors.Value())
-	fmt.Printf("TxErrors : %v\n", g.TxErrors.Value())
+func PrintCounter(name string, c ethdev.Counter) {
+	if c == nil {
+		return
+	}
+	fmt.Printf("%s: %v\n", name, c.Value())
+}
 
+func PrintCounters(g *ethdev.CounterGroup) {
+	PrintCounter("RxPackets", g.RxPackets)
+	PrintCounter("TxPackets", g.TxPackets)
+	PrintCounter("RxOctets ", g.RxOctets)
+	PrintCounter("TxOctets ", g.TxOctets)
+	PrintCounter("RxMissed ", g.RxMissed)
+	PrintCounter("RxErrors ", g.RxErrors)
+	PrintCounter("TxErrors ", g.TxErrors)
 	for name, c := range g.Ext {
-		fmt.Printf("%s: %v\n", name, c.Value())
+		PrintCounter(name, c)
 	}
 }
