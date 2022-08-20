@@ -23,7 +23,6 @@ var (
 // device -> hexdigit{1,2}
 // func -> hexdigit{1}
 // hexdigit -> [0-9a-fA-F]
-//
 func ParseAddr(s string) (*Addr, error) {
 	addr := new(Addr)
 	var i int

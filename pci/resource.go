@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"reflect"
 	"syscall"
 	"unsafe"
 )
@@ -83,7 +84,8 @@ type Resource interface {
 }
 
 type MemResource struct {
-	b []byte
+	b   []byte
+	u32 []uint32
 }
 
 func OpenMemResource(addr *Addr, index int, info *ResourceInfo) (*MemResource, error) {
@@ -101,6 +103,15 @@ func OpenMemResource(addr *Addr, index int, info *ResourceInfo) (*MemResource, e
 	if err != nil {
 		return r, err
 	}
+	err = syscall.Mlock(b)
+	if err != nil {
+		syscall.Munmap(b)
+		return r, err
+	}
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&r.u32))
+	hdr.Data = uintptr(unsafe.Pointer(&b[0]))
+	hdr.Len = len(b) / 4
+	hdr.Cap = cap(b) / 4
 	r.b = b
 
 	return r, nil
@@ -111,16 +122,15 @@ func (r *MemResource) Close() error {
 }
 
 func (r *MemResource) Read32(off int) uint32 {
-	return *(*uint32)(unsafe.Pointer(&r.b[off]))
+	return r.u32[off/4]
 }
 
 func (r *MemResource) Write32(off int, val uint32) {
-	d := (*uint32)(unsafe.Pointer(&r.b[off]))
-	*d = val
+	r.u32[off/4] = val
 }
 
 func (r *MemResource) MaskWrite32(off int, val uint32, mask uint32) {
-	d := (*uint32)(unsafe.Pointer(&r.b[off]))
+	d := &r.u32[off/4]
 	*d = (*d & ^mask) | (val & mask)
 }
 
