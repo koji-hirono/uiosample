@@ -1,9 +1,13 @@
 package pci
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"syscall"
 	"unsafe"
 )
@@ -15,20 +19,124 @@ const (
 	CapList = 0x34
 )
 
-type Config struct {
-	id int
-	fd int
+func LoadVendorID(addr *Addr) (uint16, error) {
+	s, err := loadString(addr, "vendor")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseUint(s, 0, 16)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(id), nil
 }
 
-func OpenConfig(id int) (*Config, error) {
+func LoadDeviceID(addr *Addr) (uint16, error) {
+	s, err := loadString(addr, "device")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseUint(s, 0, 16)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(id), nil
+}
+
+func LoadSubsystemVendorID(addr *Addr) (uint16, error) {
+	s, err := loadString(addr, "subsystem_vendor")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseUint(s, 0, 16)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(id), nil
+}
+
+func LoadSubsystemDeviceID(addr *Addr) (uint16, error) {
+	s, err := loadString(addr, "subsystem_device")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseUint(s, 0, 16)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(id), nil
+}
+
+func LoadRevisionID(addr *Addr) (uint8, error) {
+	s, err := loadString(addr, "revision")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseUint(s, 0, 8)
+	if err != nil {
+		return 0, err
+	}
+	return uint8(id), nil
+}
+
+func loadString(addr *Addr, name string) (string, error) {
+	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/%s", addr, name)
+	f, err := os.Open(fname)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	if !s.Scan() {
+		return "", io.ErrUnexpectedEOF
+	}
+	return s.Text(), nil
+}
+
+type Config struct {
+	VendorID          uint16
+	DeviceID          uint16
+	SubsystemVendorID uint16
+	SubsystemDeviceID uint16
+	RevisionID        uint8
+	addr              *Addr
+	fd                int
+}
+
+func OpenConfig(addr *Addr) (*Config, error) {
 	c := new(Config)
-	c.id = id
-	fname := fmt.Sprintf("/sys/class/uio/uio%v/device/config", id)
+	c.addr = addr
+	fname := fmt.Sprintf("/sys/bus/pci/devices/%s/config", addr)
 	fd, err := syscall.Open(fname, syscall.O_RDWR, 0)
 	if err != nil {
 		return c, err
 	}
 	c.fd = fd
+	vendor, err := LoadVendorID(addr)
+	if err != nil {
+		return c, err
+	}
+	c.VendorID = vendor
+	device, err := LoadDeviceID(addr)
+	if err != nil {
+		return c, err
+	}
+	c.DeviceID = device
+	rev, err := LoadRevisionID(addr)
+	if err != nil {
+		return c, err
+	}
+	c.RevisionID = rev
+	subvendor, err := LoadSubsystemVendorID(addr)
+	if err != nil {
+		return c, err
+	}
+	c.SubsystemVendorID = subvendor
+	subdevice, err := LoadSubsystemDeviceID(addr)
+	if err != nil {
+		return c, err
+	}
+	c.SubsystemDeviceID = subdevice
 	return c, nil
 }
 

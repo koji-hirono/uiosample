@@ -1,7 +1,6 @@
 package pci
 
 import (
-	"log"
 	"syscall"
 	"testing"
 )
@@ -16,7 +15,13 @@ func TestDevUIO(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	c, err := OpenConfig(0)
+	addr := &Addr{
+		Domain: 0,
+		Bus:    0,
+		ID:     10,
+		Func:   0,
+	}
+	c, err := OpenConfig(addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,11 +32,23 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Printf("buf:\n%s", s)
+	t.Logf("buf:\n%s", s)
+
+	t.Logf("Vendor ID: %x\n", c.VendorID)
+	t.Logf("Device ID: %x\n", c.DeviceID)
+	t.Logf("Revision ID: %x\n", c.RevisionID)
+	t.Logf("Subsystem Vendor ID: %x\n", c.SubsystemVendorID)
+	t.Logf("Subsystem Device ID: %x\n", c.SubsystemDeviceID)
 }
 
 func TestCap(t *testing.T) {
-	c, err := OpenConfig(0)
+	addr := &Addr{
+		Domain: 0,
+		Bus:    0,
+		ID:     10,
+		Func:   0,
+	}
+	c, err := OpenConfig(addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +63,7 @@ func TestCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Printf("pos: %x\n", pos)
+	t.Logf("pos: %x\n", pos)
 
 	vndr, err := c.Read8(int(pos))
 	if err != nil {
@@ -58,8 +75,8 @@ func TestCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Printf("vndr: %x\n", vndr)
-	log.Printf("next: %x\n", next)
+	t.Logf("vndr: %x\n", vndr)
+	t.Logf("next: %x\n", next)
 }
 
 func TestMapResource(t *testing.T) {
@@ -75,9 +92,9 @@ func TestMapResource(t *testing.T) {
 	}
 	defer device.Close()
 	for i, res := range device.Ress {
-		log.Printf("Res[%v]:\n", i)
+		t.Logf("Res[%v]:\n", i)
 		if res != nil {
-			log.Printf("0000: 0x%08x\n", res.Read32(0))
+			t.Logf("0000: 0x%08x\n", res.Read32(0))
 		}
 	}
 }
