@@ -40,7 +40,7 @@ func main() {
 	hugetlb.SetPages(128)
 	hugetlb.Init()
 
-	c, err := pci.OpenConfig(0)
+	c, err := pci.OpenConfig(addr)
 	if err != nil {
 		log.Fatal(err)
 	}
