@@ -1,5 +1,9 @@
 package e1000
 
+import (
+	"uiosample/pci"
+)
+
 const (
 	CTRL = 0x0000
 
@@ -130,3 +134,19 @@ const (
 	TCTL_EN  uint32 = uint32(1) << 1
 	TCTL_PSP uint32 = uint32(1) << 3
 )
+
+type Reg struct {
+	res pci.Resource
+}
+
+func (r Reg) Read(reg int) uint32 {
+	return r.res.Read32(reg)
+}
+
+func (r Reg) Write(reg int, val uint32) {
+	r.res.Write32(reg, val)
+}
+
+func (r Reg) MaskWrite(reg int, val, mask uint32) {
+	r.res.MaskWrite32(reg, val, mask)
+}
